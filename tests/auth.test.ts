@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { createDatabase } from "@/lib/db-client";
 import {
   authenticateUser,
+  ACCOUNT_AUTH_LIMIT,
   AUTH_LIMIT,
   AUTH_WINDOW_MS,
   consumeAuthAttempt,
@@ -21,6 +22,7 @@ import {
   sessionCookieOptions,
 } from "@/lib/auth/tokens";
 import { credentialsSchema } from "@/lib/auth/validation";
+import { clientIpFromForwardedFor } from "@/lib/auth/client-ip";
 
 const directory = mkdtempSync(join(tmpdir(), "seedee-auth-"));
 const url = `file:${join(directory, "test.db")}`;
@@ -195,6 +197,66 @@ describe("account and session boundary", () => {
     await expect(
       consumeAuthAttempt(db, "fresh@example.test", "192.0.2.56", now),
     ).resolves.toBeUndefined();
+  });
+
+  it("caps failed guesses per account even when the client IP rotates", async () => {
+    const target = { ...credentials, email: "ceiling@example.test" };
+    await registerUser(db, target, null);
+    for (let count = 2; count < ACCOUNT_AUTH_LIMIT; count++)
+      await expect(
+        authenticateUser(
+          db,
+          { ...target, password: "Rotating guess here" },
+          clientIpFromForwardedFor(`10.9.${count}.1, 203.0.113.99`, "2"),
+        ),
+      ).rejects.toThrow("Email or password is incorrect.");
+    await expect(authenticateUser(db, target, null)).resolves.toMatchObject({
+      email: target.email,
+    });
+    const guess = { ...target, password: "Rotating guess here" };
+    await expect(authenticateUser(db, guess, "10.9.250.1")).rejects.toThrow(
+      "Email or password is incorrect.",
+    );
+    await expect(authenticateUser(db, guess, "10.9.251.1")).rejects.toThrow(
+      "Too many attempts",
+    );
+    await expect(authenticateUser(db, target, null)).rejects.toThrow(
+      "Too many attempts",
+    );
+  });
+
+  it("counts successful sign-ups toward the per-IP limit", async () => {
+    const now = new Date("2026-03-01T00:00:00Z");
+    const signupIp = "192.0.2.77";
+    await registerUser(
+      db,
+      { ...credentials, email: "counted@example.test" },
+      signupIp,
+    );
+    for (let count = 1; count < IP_AUTH_LIMIT; count++)
+      await consumeAuthAttempt(
+        db,
+        `signup${count}@example.test`,
+        signupIp,
+        now,
+      );
+    await expect(
+      consumeAuthAttempt(db, "one-more@example.test", signupIp, now),
+    ).rejects.toThrow("Too many attempts");
+  });
+
+  it("ignores client-supplied forwarding entries unless proxy hops are trusted", () => {
+    expect(clientIpFromForwardedFor("198.51.100.1", undefined)).toBeNull();
+    expect(clientIpFromForwardedFor("198.51.100.1", "0")).toBeNull();
+    expect(clientIpFromForwardedFor("198.51.100.1", "nonsense")).toBeNull();
+    expect(clientIpFromForwardedFor(null, "1")).toBeNull();
+    expect(clientIpFromForwardedFor("6.6.6.6, 198.51.100.1", "1")).toBe(
+      "198.51.100.1",
+    );
+    expect(
+      clientIpFromForwardedFor("6.6.6.6, 198.51.100.1, 10.0.0.2", "2"),
+    ).toBe("198.51.100.1");
+    expect(clientIpFromForwardedFor("198.51.100.1", "2")).toBeNull();
   });
 
   it("rejects password truncation and configures httpOnly same-site cookies", () => {

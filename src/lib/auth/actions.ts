@@ -5,15 +5,14 @@ import { redirect } from "next/navigation";
 import { ZodError } from "zod";
 import { db } from "@/lib/db";
 import { authenticateUser, AuthError, registerUser } from "./service";
+import { clientIpFromForwardedFor } from "./client-ip";
 import { endSession, startSession } from "./session";
 import type { AuthState } from "./validation";
 
 async function clientIp() {
-  const requestHeaders = await headers();
-  return (
-    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    requestHeaders.get("x-real-ip")?.trim() ||
-    "unknown"
+  return clientIpFromForwardedFor(
+    (await headers()).get("x-forwarded-for"),
+    process.env.TRUST_PROXY_HOPS,
   );
 }
 

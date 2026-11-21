@@ -6,6 +6,7 @@ import { credentialsSchema, signUpSchema } from "./validation";
 
 export const AUTH_LIMIT = 10;
 export const IP_AUTH_LIMIT = 50;
+export const ACCOUNT_AUTH_LIMIT = 30;
 export const AUTH_WINDOW_MS = 15 * 60 * 1000;
 const publicUser = { id: true, name: true, email: true } as const;
 // Equal-cost work for an unknown email; computed once per server process.
@@ -13,11 +14,12 @@ const dummyHash = hashPassword("seedee-dummy-account-not-a-login");
 
 export class AuthError extends Error {}
 
-function throttleKeys(email: string, clientIp: string) {
-  const ip = clientIp.trim() || "unknown";
+function throttleKeys(email: string, clientIp: string | null) {
+  const account = email.trim().toLowerCase();
   return {
-    account: hashToken(`account:${email.trim().toLowerCase()}|${ip}`),
-    ip: hashToken(`ip:${ip}`),
+    account: hashToken(`email:${account}`),
+    accountIp: clientIp ? hashToken(`account:${account}|${clientIp}`) : null,
+    ip: clientIp ? hashToken(`ip:${clientIp}`) : null,
   };
 }
 
@@ -31,47 +33,57 @@ async function countAttempt(db: PrismaClient, key: string, now: Date) {
   return attempt.attempts;
 }
 
+async function uncountAttempt(db: PrismaClient, key: string) {
+  await db.authThrottle.updateMany({
+    where: { key, attempts: { gt: 0 } },
+    data: { attempts: { decrement: 1 } },
+  });
+}
+
 export async function consumeAuthAttempt(
   db: PrismaClient,
   email: string,
-  clientIp: string,
+  clientIp: string | null,
   now = new Date(),
 ) {
   const keys = throttleKeys(email, clientIp);
-  const accountAttempts = await countAttempt(db, keys.account, now);
-  const ipAttempts = await countAttempt(db, keys.ip, now);
-  if (accountAttempts > AUTH_LIMIT || ipAttempts > IP_AUTH_LIMIT)
+  let limited =
+    (await countAttempt(db, keys.account, now)) > ACCOUNT_AUTH_LIMIT;
+  if (keys.accountIp && keys.ip) {
+    if ((await countAttempt(db, keys.accountIp, now)) > AUTH_LIMIT)
+      limited = true;
+    if ((await countAttempt(db, keys.ip, now)) > IP_AUTH_LIMIT) limited = true;
+  }
+  if (limited)
     throw new AuthError("Too many attempts. Try again in 15 minutes.");
 }
 
 export async function clearAuthAttempts(
   db: PrismaClient,
   email: string,
-  clientIp: string,
+  clientIp: string | null,
 ) {
   const keys = throttleKeys(email, clientIp);
-  await db.authThrottle.deleteMany({ where: { key: keys.account } });
-  await db.authThrottle.updateMany({
-    where: { key: keys.ip, attempts: { gt: 0 } },
-    data: { attempts: { decrement: 1 } },
-  });
+  await uncountAttempt(db, keys.account);
+  if (keys.accountIp && keys.ip) {
+    await db.authThrottle.deleteMany({ where: { key: keys.accountIp } });
+    await uncountAttempt(db, keys.ip);
+  }
 }
 
 export async function registerUser(
   db: PrismaClient,
   input: unknown,
-  clientIp: string,
+  clientIp: string | null,
 ) {
   const parsed = signUpSchema.parse(input);
   await consumeAuthAttempt(db, parsed.email, clientIp);
   const passwordHash = await hashPassword(parsed.password);
   try {
-    const user = await db.user.create({
+    return await db.user.create({
       data: { name: parsed.name, email: parsed.email, passwordHash },
       select: publicUser,
     });
-    await clearAuthAttempts(db, parsed.email, clientIp);
-    return user;
   } catch (error) {
     if (
       error &&
@@ -90,7 +102,7 @@ export async function registerUser(
 export async function authenticateUser(
   db: PrismaClient,
   input: unknown,
-  clientIp: string,
+  clientIp: string | null,
 ) {
   const parsed = credentialsSchema.parse(input);
   await consumeAuthAttempt(db, parsed.email, clientIp);

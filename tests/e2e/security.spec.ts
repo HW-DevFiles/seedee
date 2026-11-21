@@ -50,7 +50,9 @@ test("two browser sessions see only their own account and sign-out revokes acces
   browser,
 }) => {
   const secondContext = await browser.newContext({
-    ignoreHTTPSErrors: process.env.E2E_EXTERNAL_SERVER === "1",
+    ignoreHTTPSErrors:
+      process.env.E2E_PRODUCTION === "1" ||
+      process.env.E2E_EXTERNAL_SERVER === "1",
   });
   const secondPage = await secondContext.newPage();
   try {

@@ -25,6 +25,12 @@ describe("UI boundaries", () => {
       "90071992547410.00",
     ])
       expect(() => dollarsToMinor(value)).toThrow();
+    expect(() => dollarsToMinor("-1")).toThrow(
+      "Enter a nonnegative USD amount with up to two decimal places.",
+    );
+    expect(() => dollarsToMinor("-12.345", true)).toThrow(
+      /^Enter a USD amount with up to two decimal places\.$/,
+    );
     expect(displayMinor(null)).toBe("Unknown");
     expect(displayMinor(0)).toBe("$0.00");
     expect(displayMinor(-259648)).toBe("−$2,596.48");

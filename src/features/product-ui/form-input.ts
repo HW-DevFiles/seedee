@@ -5,7 +5,9 @@ export function dollarsToMinor(value: string, signed = false): number | null {
   if (value.trim() === "") return null;
   if (!(signed ? /^-?\d+(?:\.\d{1,2})?$/ : /^\d+(?:\.\d{1,2})?$/).test(value))
     throw new Error(
-      "Enter a nonnegative USD amount with up to two decimal places.",
+      signed
+        ? "Enter a USD amount with up to two decimal places."
+        : "Enter a nonnegative USD amount with up to two decimal places.",
     );
   const negative = value.startsWith("-");
   const [whole, fraction = ""] = (negative ? value.slice(1) : value).split(".");

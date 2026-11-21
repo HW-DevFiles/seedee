@@ -24,7 +24,10 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node --import tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:reset-demo": "node --import tsx scripts/reset-demo.ts",
+    "platform:rehearse": "node --import tsx scripts/rehearse.ts",
+    "platform:runtime-check": "node --import tsx scripts/check-production.ts"
   },
   "dependencies": {
     "@prisma/client": "7.10.1",

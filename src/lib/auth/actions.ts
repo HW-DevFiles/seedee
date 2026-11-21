@@ -1,11 +1,21 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ZodError } from "zod";
 import { db } from "@/lib/db";
 import { authenticateUser, AuthError, registerUser } from "./service";
 import { endSession, startSession } from "./session";
 import type { AuthState } from "./validation";
+
+async function clientIp() {
+  const requestHeaders = await headers();
+  return (
+    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    requestHeaders.get("x-real-ip")?.trim() ||
+    "unknown"
+  );
+}
 
 function errorState(error: unknown): AuthState {
   if (error instanceof ZodError)
@@ -20,7 +30,11 @@ export async function signUp(
   formData: FormData,
 ): Promise<AuthState> {
   try {
-    const user = await registerUser(db, Object.fromEntries(formData));
+    const user = await registerUser(
+      db,
+      Object.fromEntries(formData),
+      await clientIp(),
+    );
     await startSession(user.id);
   } catch (error) {
     return errorState(error);
@@ -33,7 +47,11 @@ export async function signIn(
   formData: FormData,
 ): Promise<AuthState> {
   try {
-    const user = await authenticateUser(db, Object.fromEntries(formData));
+    const user = await authenticateUser(
+      db,
+      Object.fromEntries(formData),
+      await clientIp(),
+    );
     await startSession(user.id);
   } catch (error) {
     return errorState(error);

@@ -51,7 +51,7 @@ Use Route Handlers for future exports, webhooks, or external machine APIs. They 
 
 ## Persistence and migrations
 
-`User` owns zero or one `Agency`; a unique `Agency.ownerId` enforces that rule. `Session` and `AuthThrottle` support the shell's authentication. Feature models are intentionally left to their owners. Prefer portable Prisma scalar fields and explicit relations. The current schema does not use SQLite-specific application columns, native database type annotations, or unsupported enums.
+`User` owns zero or one `Agency`; a unique `Agency.ownerId` enforces that rule. `Session` and `AuthThrottle` support the shell's authentication. The workspace package adds drafts, offers, clients, projects/tasks, closeout/evidence, immutable finance/export snapshots, data-room metadata and the engine/automation state rows. See [BACKEND.md](BACKEND.md) for its typed boundaries and integration order. Prefer portable Prisma scalar fields and explicit relations. The current schema does not use SQLite-specific application columns, native database type annotations, or unsupported enums.
 
 Prisma 7 uses `prisma.config.ts` for the CLI datasource and `@prisma/adapter-better-sqlite3` at runtime. Both interpret the default `file:./prisma/dev.db` relative to the repository root. Use Node 22 LTS. Keep Prisma CLI, client, and adapter versions aligned. An npm override pins `effect` to `^3.22.1` on the 3.x line because Prisma's tooling previously resolved a version affected by GHSA-7589-6fvf-x4pw. Retain the override until the upstream dependency resolves a patched compatible version without it; verify generate, migrations, seed, tests, and `npm audit` after changes. ESLint stays on the 9.x peer range declared by Next's React/import/accessibility plugins.
 
@@ -75,7 +75,7 @@ The idempotent seed creates a sample account and agency without overwriting an e
 5. Add behavior tests for the feature's observable outputs and authorization failures. Extend the browser smoke flow only when it covers a meaningful user journey.
 6. Update the UI's preview labels only once the behavior actually works. Generated agency drafts require explicit acceptance before persistence; simulations must not imply real client work, traction, or external actions.
 
-The core scaffold provides no readiness score, financial model, autonomous agents, or investment claims. Finance feature owners define those contracts separately, with provenance and as-of dates for sample, assumed, and user-entered evidence.
+The workspace backend provides deterministic readiness, cash/capacity and hypothetical equity services under the versioned [finance contract](FINANCE.md). Product screen wiring remains a separate integration step. It deploys no autonomous agents and makes no investment claim. Every finance snapshot retains provenance, effective/evaluation dates and formula versions.
 
 ## AI seam
 

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createDatabase } from "../src/lib/db-client";
 import { readEnvironment } from "../src/lib/env";
+import { initializeSyntheticWorkspace } from "./seed-domain";
 import { seedLocalDemo } from "../src/lib/local-demo";
 
 async function main() {
@@ -8,6 +9,7 @@ async function main() {
   const db = createDatabase(env.DATABASE_URL);
   try {
     await seedLocalDemo(db, env);
+    await initializeSyntheticWorkspace(db, new Date());
     console.log(
       "Synthetic local sample is ready. Existing records were preserved.",
     );

@@ -152,7 +152,7 @@ it("loads only an owned versioned baseline and persists only a separate proposal
     ),
     readAt: now,
     userName: "Sample",
-    context: { userId: "sample" },
+    context: { userId: "sample", clientIp: null },
   } as IntegratedRead;
   const card = connectedScreen(data, "growth")!.screen.cards![0];
   expect(card.details).toEqual(
@@ -322,7 +322,7 @@ it("renders one missing-founder notice for an owner's new snapshot and no sample
     ),
     readAt: now,
     userName: "Other",
-    context: { userId: "other" },
+    context: { userId: "other", clientIp: null },
   } as IntegratedRead;
   const view = connectedScreen(data, "readiness")!.screen;
   expect(

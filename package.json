@@ -27,10 +27,11 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "7.10.1",
     "@prisma/adapter-better-sqlite3": "7.10.1",
+    "@prisma/client": "7.10.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
+    "decimal.js": "^10.6.0",
     "next": "16.4.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

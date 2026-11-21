@@ -52,7 +52,7 @@ Additional platform checks: `npm run platform:rehearse`, `npm run platform:runti
 
 Copy `.env.example` to `.env`. [Local operation: configuration](docs/OPERATIONS.md#configuration) owns the variables, defaults, accepted values and production startup refusals.
 
-The demo provider uses built-in sample logic with no network or keys. A future provider must implement the typed interface under `src/lib/ai` and be explicitly enabled by the server-side factory. Adding an environment value alone cannot enable a paid model.
+The demo provider uses built-in sample logic with no network or keys. It supports validated agency proposals for seven creative practices, internal task artifacts and evidence-linked private pitch drafts. The [agency engine handoff](docs/AGENCY-ENGINE.md) documents persistence, owner review and required cross-package bindings; the current route placeholders do not claim those integrations are complete. A future provider must implement the typed interface under `src/lib/ai` and be explicitly enabled by the server-side factory. Adding an environment value alone cannot enable a paid model.
 
 ## Build on the foundation
 

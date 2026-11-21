@@ -24,21 +24,38 @@ function total(values: (number | null)[]): number | null {
   }
   return result;
 }
-export function growthMetrics(
-  state: AutomationState,
-  facts: GrowthFacts,
-  now: Date,
-): GrowthMetrics {
+export function completedInPeriod(facts: GrowthFacts) {
   const start = checkedInstant(facts.period.from).getTime();
   const end = checkedInstant(facts.period.through).getTime();
   if (end < start)
     throw new AutomationError("invalid_input", "Invalid growth period.");
-  const completed = facts.projects.filter(
+  return facts.projects.filter(
     (p) =>
       p.completedAt &&
       checkedInstant(p.completedAt).getTime() >= start &&
       checkedInstant(p.completedAt).getTime() <= end,
   );
+}
+export function repeatClientProjects(
+  completed: GrowthFacts["projects"],
+): GrowthFacts["projects"] {
+  const groups = new Map<string, number>();
+  for (const project of completed)
+    if (project.economicClientGroupId)
+      groups.set(
+        project.economicClientGroupId,
+        (groups.get(project.economicClientGroupId) ?? 0) + 1,
+      );
+  return completed.filter(
+    (p) => p.economicClientGroupId && groups.get(p.economicClientGroupId)! >= 2,
+  );
+}
+export function growthMetrics(
+  state: AutomationState,
+  facts: GrowthFacts,
+  now: Date,
+): GrowthMetrics {
+  const completed = completedInPeriod(facts);
   const ids = new Set(completed.map((p) => p.id));
   const closeouts = facts.closeouts.filter((c) => ids.has(c.projectId));
   if (new Set(closeouts.map((c) => c.projectId)).size !== closeouts.length)
@@ -54,20 +71,15 @@ export function growthMetrics(
   const costs = completeCoverage
     ? total(closeouts.map((c) => c.deliveryCostMinor))
     : null;
-  const groups = new Map<string, number>();
-  for (const project of completed)
-    if (project.economicClientGroupId)
-      groups.set(
-        project.economicClientGroupId,
-        (groups.get(project.economicClientGroupId) ?? 0) + 1,
-      );
   return {
     basis: "completed_project_closeouts",
     note: "Recognized revenue and receipts are recorded closeout amounts for projects completed in this window; these are not monthly cash-flow actuals.",
     period: facts.period,
     origin: facts.origin,
     completedProjects: completed.length,
-    repeatClients: [...groups.values()].filter((count) => count >= 2).length,
+    repeatClients: new Set(
+      repeatClientProjects(completed).map((p) => p.economicClientGroupId),
+    ).size,
     recognizedRevenueMinor: revenue,
     collectionsMinor: completeCoverage
       ? total(closeouts.map((c) => c.receiptsMinor))

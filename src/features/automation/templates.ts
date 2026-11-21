@@ -32,6 +32,7 @@ export const routineTemplates = [
     key: "weekly_planning",
     title: "Weekly planning",
     cadence: "weekly",
+    duePeriods: 1,
     input:
       "Review priorities, capacity and blocked work. Prepare an internal plan for owner review.",
   },
@@ -39,6 +40,7 @@ export const routineTemplates = [
     key: "monthly_evidence",
     title: "Monthly evidence review",
     cadence: "monthly",
+    duePeriods: 1,
     input:
       "Review completed work, recognized revenue, receipts and evidence gaps. Unknown facts stay unknown.",
   },

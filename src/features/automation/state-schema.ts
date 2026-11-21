@@ -88,6 +88,7 @@ export const automationStateSchema: z.ZodType<AutomationState> = z.object({
         "failed_run",
         "overdue_task",
         "milestone_completed",
+        "task_reconciled",
       ]),
       message: text,
       target: z.object({ type: z.enum(["task", "milestone"]), id: text }),

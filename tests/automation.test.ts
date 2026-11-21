@@ -296,9 +296,9 @@ describe("routines and deterministic local calendar", () => {
         enabled: false,
       }),
     );
-    expect(
-      success(await s.command({ type: "run_due_routines" })).state.tasks,
-    ).toHaveLength(0);
+    const paused = success(await s.command({ type: "run_due_routines" }));
+    expect(paused.state.tasks).toHaveLength(0);
+    expect(paused.state.version).toBe(1);
     success(
       await s.command({
         type: "configure_routine",
@@ -311,11 +311,12 @@ describe("routines and deterministic local calendar", () => {
     );
     const request = { type: "run_due_routines" } as const;
     const results = await Promise.all([
-      s.command(request, "due", 3),
-      s.command(request, "due", 3),
+      s.command(request, "due", 2),
+      s.command(request, "due", 2),
     ]);
     const state = success(results[0]).state;
     expect(state.tasks).toHaveLength(1);
+    expect(state.tasks[0].dueAt).toBe("2026-11-22T14:00:00.000Z");
     expect(state.occurrences[0].skippedCount).toBe(2);
     expect(state.routines[0].nextDueAt).toBe("2026-11-22T14:00:00.000Z");
     expect(success(await s.command(request)).state.tasks).toHaveLength(1);
@@ -504,14 +505,28 @@ describe("integrity and corrected evidence", () => {
       cycle.readWorkspace(s.context.ownerId, s.context.agencyId),
     ).rejects.toMatchObject({ code: "invalid_input" });
     initial.tasks[0].dependencies = [];
-    initial.tasks[1].projectId = "foreign-project";
+    initial.tasks[1].projectId = "other-project";
     const cross = createAutomationService(
-      createFixtureRepository(s.context, initial).repository,
+      createFixtureRepository(
+        {
+          ...s.context,
+          projectIds: [...s.context.projectIds, "other-project"],
+        },
+        initial,
+      ).repository,
       () => now,
     );
     await expect(
       cross.readWorkspace(s.context.ownerId, s.context.agencyId),
-    ).rejects.toMatchObject({ code: "forbidden_or_missing" });
+    ).rejects.toMatchObject({ code: "invalid_input" });
+    initial.tasks[1].projectId = "foreign-project";
+    const foreign = await createAutomationService(
+      createFixtureRepository(s.context, initial).repository,
+      () => now,
+    ).readWorkspace(s.context.ownerId, s.context.agencyId);
+    expect(
+      foreign.state.tasks.some((t) => t.projectId === "foreign-project"),
+    ).toBe(false);
   });
   it("rejects old approved revisions and clears artifact identity on revision", async () => {
     const s = setup();
@@ -606,5 +621,147 @@ describe("integrity and corrected evidence", () => {
     const view = success(await command({ type: "run_due_routines" }));
     expect(view.state.routines[0].nextDueAt).toBe("2026-03-31T13:00:00.000Z");
     expect(view.state.occurrences.map((o) => o.skippedCount)).toEqual([0, 0]);
+  });
+});
+describe("review regressions", () => {
+  it("dues a fresh routine task at the end of its cadence period, never overdue", async () => {
+    const s = setup();
+    for (const [routineId, templateKey] of [
+      ["weekly", "weekly_planning"],
+      ["monthly", "monthly_evidence"],
+    ] as const)
+      success(
+        await s.command({
+          type: "configure_routine",
+          routineId,
+          templateKey,
+          timezone: "America/New_York",
+          nextDueAt: now.toISOString(),
+          enabled: true,
+        }),
+      );
+    const view = success(await s.command({ type: "run_due_routines" }));
+    expect(view.state.tasks.map((t) => t.dueAt)).toEqual([
+      "2026-11-28T12:00:00.000Z",
+      "2026-12-21T12:00:00.000Z",
+    ]);
+    expect(view.metrics.overdueTasks).toBe(0);
+    expect(
+      view.state.notifications.filter((n) => n.kind === "overdue_task"),
+    ).toHaveLength(0);
+  });
+  it("commits nothing for a no-op due-routine run and caps retained receipts", async () => {
+    const s = setup();
+    success(await s.command({ type: "refresh_growth" }));
+    const saved = s.snapshot();
+    success(await s.command({ type: "run_due_routines" }));
+    expect(s.snapshot()).toEqual(saved);
+    for (let i = 0; i < 505; i++)
+      success(await s.command({ type: "refresh_growth" }, `cap-${i}`));
+    const receipts = s.snapshot()!.receipts.map((r) => r.key);
+    expect(receipts).toHaveLength(500);
+    expect(receipts).not.toContain("cap-4");
+    expect(receipts).toContain("cap-504");
+  });
+  it("keeps unread and still-true notices while capping read history", async () => {
+    const seed = setup();
+    await instantiate(seed);
+    success(await seed.command({ type: "mark_notifications_read" }));
+    const initial = seed.snapshot()!;
+    const old = (i: number, readAt: string | null) => ({
+      id: `old-${i}`,
+      eventKey: `old-${i}`,
+      kind: "awaiting_review" as const,
+      message: "Old notice.",
+      target: { type: "task" as const, id: "gone" },
+      createdAt: "2026-01-01T00:00:00.000Z",
+      readAt,
+    });
+    initial.notifications = [
+      old(-1, null),
+      ...Array.from({ length: 250 }, (_, i) =>
+        old(i, "2026-01-02T00:00:00.000Z"),
+      ),
+      ...initial.notifications,
+    ];
+    const fixture = createFixtureRepository(fixtureContext(), initial);
+    const service = createAutomationService(fixture.repository, () => now);
+    success(
+      await service.command(fixture.context.ownerId, {
+        agencyId: fixture.context.agencyId,
+        expectedVersion: initial.version,
+        idempotencyKey: "refresh",
+        command: { type: "refresh_growth" },
+      }),
+    );
+    const notices = fixture.snapshot()!.notifications;
+    expect(notices.filter((n) => n.kind === "overdue_task")).toHaveLength(6);
+    expect(notices.some((n) => n.id === "old--1")).toBe(true);
+    expect(notices.filter((n) => n.id.startsWith("old-"))).toHaveLength(201);
+    expect(notices.some((n) => n.id === "old-49")).toBe(false);
+  });
+  it("renotifies a missed rescheduled deadline and a re-completed milestone", async () => {
+    const s = setup();
+    const { state } = await instantiate(s);
+    const task = state.tasks[0];
+    const view = success(
+      await s.command({
+        type: "reschedule_task",
+        taskId: task.id,
+        expectedTaskVersion: task.version,
+        dueAt: "2026-11-21T06:00:00Z",
+        reason: "Owner moved the deadline.",
+      }),
+    );
+    expect(
+      view.state.notifications.filter(
+        (n) => n.kind === "overdue_task" && n.target.id === task.id,
+      ),
+    ).toHaveLength(2);
+
+    const fixture = createFixtureRepository();
+    let clock = now;
+    const service = createAutomationService(fixture.repository, () => clock);
+    let key = 0;
+    const refresh = () =>
+      service.command(fixture.context.ownerId, {
+        agencyId: fixture.context.agencyId,
+        expectedVersion: fixture.snapshot()?.version ?? 0,
+        idempotencyKey: `milestone-${++key}`,
+        command: { type: "refresh_growth" },
+      });
+    fixture.context.growth.offers = [{ id: "offer", active: true }];
+    success(await refresh());
+    fixture.context.growth.offers = [];
+    clock = new Date("2026-11-21T13:00:00Z");
+    success(await refresh());
+    fixture.context.growth.offers = [{ id: "offer", active: true }];
+    clock = new Date("2026-11-21T14:00:00Z");
+    const after = success(await refresh());
+    expect(
+      after.state.notifications.filter(
+        (n) =>
+          n.kind === "milestone_completed" && n.target.id === "first_offer",
+      ),
+    ).toHaveLength(2);
+  });
+  it("publishes only same-group projects as repeat-client evidence", async () => {
+    const s = setup();
+    s.context.growth.projects = [
+      { id: "p1", completedAt: now.toISOString(), economicClientGroupId: "g" },
+      { id: "p2", completedAt: now.toISOString(), economicClientGroupId: "g" },
+      { id: "p3", completedAt: now.toISOString(), economicClientGroupId: "h" },
+    ];
+    const view = success(await s.command({ type: "refresh_growth" }));
+    expect(
+      view.state.milestones.find((m) => m.key === "repeat_client")!.evidenceIds,
+    ).toEqual(["p1", "p2"]);
+  });
+  it("reserves the engine event key namespace", async () => {
+    const s = setup();
+    expect(
+      await s.command({ type: "refresh_growth" }, "engine:run-1:running"),
+    ).toMatchObject({ ok: false, code: "invalid_input" });
+    expect(s.snapshot()).toBeNull();
   });
 });

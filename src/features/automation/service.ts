@@ -8,9 +8,14 @@ import {
   type OwnedContext,
   type WorkspaceView,
 } from "./contracts";
-import { applyCommand, emptyState, workspaceView } from "./engine";
+import {
+  applyCommand,
+  emptyState,
+  recordReceipt,
+  workspaceView,
+} from "./engine";
 import { checkedInstant, type Clock } from "./clock";
-import { assertAutomationIntegrity } from "./integrity";
+import { assertAutomationIntegrity, reconcileOwned } from "./integrity";
 
 export type AutomationTransaction = {
   // Must load all foreign references only for the session-derived owner, and
@@ -64,7 +69,10 @@ export function createAutomationService(
         await tx.loadOwned(userId, agencyId),
       );
       // A GET/read has no routine, notification or milestone side effects.
-      const current = state ?? emptyState(agencyId);
+      const current = reconcileOwned(
+        structuredClone(state ?? emptyState(agencyId)),
+        context,
+      );
       assertAutomationIntegrity(current, context);
       return workspaceView(current, context, now);
     });
@@ -95,7 +103,10 @@ export function createAutomationService(
           request.agencyId,
           await tx.loadOwned(userId, request.agencyId),
         );
-        const state = structuredClone(saved ?? emptyState(request.agencyId));
+        const state = reconcileOwned(
+          structuredClone(saved ?? emptyState(request.agencyId)),
+          context,
+        );
         assertAutomationIntegrity(state, context);
         const fingerprint = createHash("sha256")
           .update(JSON.stringify(request.command))
@@ -132,7 +143,16 @@ export function createAutomationService(
           now,
         );
         assertAutomationIntegrity(state, context);
-        state.receipts.push({ key: request.idempotencyKey, fingerprint });
+        if (
+          request.command.type === "run_due_routines" &&
+          JSON.stringify(state) === JSON.stringify(saved)
+        )
+          return {
+            ok: true,
+            replayed: false,
+            workspace: workspaceView(state, context, now),
+          };
+        recordReceipt(state, { key: request.idempotencyKey, fingerprint });
         state.version += 1;
         await tx.saveOwned(userId, saved?.version ?? 0, state);
         return {

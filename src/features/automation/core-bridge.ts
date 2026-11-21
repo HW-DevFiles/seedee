@@ -8,6 +8,7 @@ import {
   taskStatusSchema,
 } from "./contracts";
 import { checkedInstant, type Clock } from "./clock";
+import { notify, stableId } from "./engine";
 import type { AutomationBridge } from "./prisma-repository";
 
 type CoreTask = {
@@ -85,17 +86,17 @@ export function createCoreAutomationBridge(
       const dependencies = await tx.$queryRaw<
         Dependency[]
       >`SELECT d."taskId",d."predecessorId" FROM "TaskDependency" d JOIN "Task" t ON t."id"=d."taskId" WHERE t."agencyId"=${state.agencyId}`;
-      // Never silently repair conflicting edits. All lifecycle writes for these
-      // tasks must call the engine event bridge or automation command service.
+      // Deleted core rows are dropped and edited title/input is adopted. Any
+      // other divergence is a lifecycle write that bypassed this service.
+      const rowIds = new Set(rows.map((r) => r.id));
+      state.tasks = state.tasks.filter((t) => rowIds.has(t.id));
       for (const task of state.tasks) {
-        const row = rows.find((r) => r.id === task.id);
+        const row = rows.find((r) => r.id === task.id)!;
+        const drifted = row.title !== task.title || row.input !== task.input;
         if (
-          !row ||
-          row.version !== task.version ||
+          (!drifted && row.version !== task.version) ||
           row.projectId !== task.projectId ||
           row.status !== task.status ||
-          row.title !== task.title ||
-          row.input !== task.input ||
           row.assignedRoleKey !== task.roleKey ||
           iso(row.dueAt) !==
             (task.dueAt ? checkedInstant(task.dueAt).toISOString() : null) ||
@@ -104,7 +105,7 @@ export function createCoreAutomationBridge(
               ? checkedInstant(task.originalCommittedDueAt).toISOString()
               : null) ||
           !sameDependencies(
-            task.dependencies,
+            task.dependencies.filter((id) => rowIds.has(id)),
             dependencies
               .filter((d) => d.taskId === task.id)
               .map((d) => d.predecessorId),
@@ -114,6 +115,18 @@ export function createCoreAutomationBridge(
             "Core task changed outside its workflow. Reload and reconcile the workflow before retrying.",
           );
         taskStatusSchema.parse(row.status);
+        if (drifted) {
+          task.title = row.title;
+          task.input = row.input;
+          task.version = row.version;
+          notify(
+            state,
+            "task_reconciled",
+            `reconciled:${stableId(task.id, JSON.stringify([row.version, row.title, row.input]))}`,
+            { type: "task", id: task.id },
+            checkedInstant(clock()).toISOString(),
+          );
+        }
       }
       return state;
     },

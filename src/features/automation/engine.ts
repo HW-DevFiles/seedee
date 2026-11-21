@@ -8,8 +8,12 @@ import {
   type TaskStatus,
   type WorkspaceView,
 } from "./contracts";
-import { checkTimezone, checkedInstant, dueSlots } from "./clock";
-import { growthMetrics } from "./growth";
+import { checkTimezone, checkedInstant, dueSlots, nextSlot } from "./clock";
+import {
+  completedInPeriod,
+  growthMetrics,
+  repeatClientProjects,
+} from "./growth";
 import {
   milestoneDefinitions,
   routineTemplates,
@@ -75,7 +79,16 @@ function newTask(
     dueDateRevisions: [],
   };
 }
-function notify(
+const RETAINED_RECEIPTS = 500;
+const RETAINED_HISTORY = 200;
+export function recordReceipt(
+  state: AutomationState,
+  receipt: AutomationState["receipts"][number],
+) {
+  state.receipts.push(receipt);
+  state.receipts = state.receipts.slice(-RETAINED_RECEIPTS);
+}
+export function notify(
   state: AutomationState,
   kind: AutomationState["notifications"][number]["kind"],
   key: string,
@@ -89,6 +102,8 @@ function notify(
     overdue_task:
       "A task is overdue. Review its original commitment and current schedule.",
     milestone_completed: "A growth milestone has recorded completion evidence.",
+    task_reconciled:
+      "A task was edited outside its workflow. Its saved title and input were adopted.",
   }[kind];
   state.notifications.push({
     id: stableId("notice", key),
@@ -288,24 +303,14 @@ export function refreshGrowth(
   ctx: OwnedContext,
   now: Date,
 ) {
-  const metrics = growthMetrics(state, ctx.growth, now);
+  growthMetrics(state, ctx.growth, now);
   const at = now.toISOString();
   const capacity = ctx.growth.capacity;
   const capacityAge = capacity
     ? now.getTime() - checkedInstant(capacity.asOf).getTime()
     : Infinity;
-  const completedProjects = new Set(
-    ctx.growth.projects
-      .filter(
-        (p) =>
-          p.completedAt &&
-          checkedInstant(p.completedAt) >=
-            checkedInstant(ctx.growth.period.from) &&
-          checkedInstant(p.completedAt) <=
-            checkedInstant(ctx.growth.period.through),
-      )
-      .map((p) => p.id),
-  );
+  const completed = completedInPeriod(ctx.growth);
+  const completedProjects = new Set(completed.map((p) => p.id));
   const ruleEvidence: Record<string, string[]> = {
     first_offer: ctx.growth.offers.filter((p) => p.active).map((p) => p.id),
     reviewed_process: ctx.growth.reviewedSopIds,
@@ -319,7 +324,7 @@ export function refreshGrowth(
           c.receiptsMinor > 0,
       )
       .map((c) => c.id),
-    repeat_client: metrics.repeatClients > 0 ? [...completedProjects] : [],
+    repeat_client: repeatClientProjects(completed).map((p) => p.id),
     capacity_review:
       capacity &&
       capacity.availableHours !== null &&
@@ -346,7 +351,7 @@ export function refreshGrowth(
         notify(
           state,
           "milestone_completed",
-          `milestone:${milestone.key}`,
+          `milestone:${milestone.key}:${milestone.completedAt}`,
           { type: "milestone", id: milestone.key },
           at,
         );
@@ -363,8 +368,10 @@ export function refreshGrowth(
       })),
     ...ctx.growth.investorGaps.map((g) => ({ ...g, key: `investor:${g.key}` })),
   ];
+  const liveKeys = new Set<string>();
   for (const taskId of ctx.growth.overdueTaskIds) {
-    if (!state.tasks.some((t) => t.id === taskId))
+    if (!state.tasks.some((t) => t.id === taskId)) {
+      liveKeys.add(`overdue:${taskId}`);
       notify(
         state,
         "overdue_task",
@@ -372,6 +379,7 @@ export function refreshGrowth(
         { type: "task", id: taskId },
         at,
       );
+    }
   }
   const priorRecommendations = state.recommendations;
   state.recommendations = gaps.map((gap) => {
@@ -394,14 +402,24 @@ export function refreshGrowth(
       checkedInstant(task.dueAt) < now &&
       task.status !== "done" &&
       task.status !== "cancelled"
-    )
+    ) {
+      liveKeys.add(`overdue:${task.id}:${task.dueAt}`);
       notify(
         state,
         "overdue_task",
-        `overdue:${task.id}:${task.originalCommittedDueAt ?? task.dueAt}`,
+        `overdue:${task.id}:${task.dueAt}`,
         { type: "task", id: task.id },
         at,
       );
+    }
+  // Unread notices and keys whose condition still holds are never pruned, so
+  // retention cannot make a deduplicated notice fire again.
+  const prunable = state.notifications.filter(
+    (n) => n.readAt && !liveKeys.has(n.eventKey),
+  );
+  const pruned = new Set(prunable.slice(0, -RETAINED_HISTORY));
+  state.notifications = state.notifications.filter((n) => !pruned.has(n));
+  state.occurrences = state.occurrences.slice(-RETAINED_HISTORY);
 }
 export function applyCommand(
   state: AutomationState,
@@ -558,7 +576,19 @@ export function applyCommand(
             "routine_task",
             `${state.agencyId}:${occurrenceKey}`,
           );
-          state.tasks.push(newTask(taskId, template.title, template.input, at));
+          state.tasks.push(
+            newTask(
+              taskId,
+              template.title,
+              template.input,
+              nextSlot(
+                routine.anchorAt,
+                routine.timezone,
+                routine.cadence,
+                advance.nextSlotIndex - 1 + template.duePeriods,
+              ),
+            ),
+          );
           state.occurrences.push({
             key: occurrenceKey,
             routineId: routine.id,
@@ -643,7 +673,7 @@ export function applyCommand(
       notify(
         state,
         "milestone_completed",
-        `milestone:${milestone.key}`,
+        `milestone:${milestone.key}:${milestone.completedAt}`,
         { type: "milestone", id: milestone.key },
         at,
       );

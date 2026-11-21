@@ -75,7 +75,11 @@ export type Notification = {
   id: string;
   eventKey: string;
   kind:
-    "awaiting_review" | "failed_run" | "overdue_task" | "milestone_completed";
+    | "awaiting_review"
+    | "failed_run"
+    | "overdue_task"
+    | "milestone_completed"
+    | "task_reconciled";
   message: string;
   target: { type: "task" | "milestone"; id: string };
   createdAt: string;
@@ -232,7 +236,9 @@ export const commandSchema = z.discriminatedUnion("type", [
 export const requestSchema = z.object({
   agencyId: id,
   expectedVersion: z.number().int().nonnegative(),
-  idempotencyKey: id,
+  idempotencyKey: id.refine((key) => !key.startsWith("engine:"), {
+    message: "Request keys cannot use the engine event namespace.",
+  }),
   command: commandSchema,
 });
 export type AutomationCommand = z.infer<typeof commandSchema>;

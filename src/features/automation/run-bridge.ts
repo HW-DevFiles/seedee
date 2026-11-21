@@ -10,9 +10,10 @@ import {
   emptyState,
   queueEligibility,
   dependenciesSatisfied,
+  recordReceipt,
   refreshGrowth,
 } from "./engine";
-import { assertAutomationIntegrity } from "./integrity";
+import { assertAutomationIntegrity, reconcileOwned } from "./integrity";
 import { checkedInstant } from "./clock";
 import type { AutomationTransaction } from "./service";
 
@@ -51,7 +52,10 @@ export async function recordRunEvent(
       "forbidden_or_missing",
       "Workspace is unavailable.",
     );
-  const state = structuredClone(loaded.state ?? emptyState(event.agencyId));
+  const state = reconcileOwned(
+    structuredClone(loaded.state ?? emptyState(event.agencyId)),
+    loaded.context,
+  );
   assertAutomationIntegrity(state, loaded.context);
   const key = `engine:${event.eventKey}`;
   const fingerprint = createHash("sha256")
@@ -146,7 +150,7 @@ export async function recordRunEvent(
   if (event.status !== "retry" && event.status !== "revision_requested")
     task.runId = event.runId;
   assertAutomationIntegrity(state, loaded.context);
-  state.receipts.push({ key, fingerprint });
+  recordReceipt(state, { key, fingerprint });
   state.version += 1;
   await tx.saveOwned(event.userId, loaded.state?.version ?? 0, state);
   return state;

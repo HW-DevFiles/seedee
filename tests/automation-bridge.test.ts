@@ -342,6 +342,57 @@ describe("core automation and engine bridge", () => {
       before.state,
     );
   });
+  it("adopts an edited core title/input on load and commits it only on a mutation", async () => {
+    const before = await service.readWorkspace("owner", "agency");
+    const id = before.state.tasks[2].id;
+    await db.$executeRaw`UPDATE "Task" SET "title"='Edited draft',"version"="version"+1 WHERE "id"=${id}`;
+    const stored =
+      await db.$queryRaw`SELECT "stateJson","version" FROM "AutomationState"`;
+    const view = await service.readWorkspace("owner", "agency");
+    expect(view.state.tasks[2]).toMatchObject({
+      title: "Edited draft",
+      version: before.state.tasks[2].version + 1,
+    });
+    expect(
+      view.state.notifications.filter((n) => n.kind === "task_reconciled"),
+    ).toHaveLength(1);
+    expect(
+      await db.$queryRaw`SELECT "stateJson","version" FROM "AutomationState"`,
+    ).toEqual(stored);
+    success(await command({ type: "refresh_growth" }));
+    const committed = await db.$queryRaw<
+      { stateJson: string }[]
+    >`SELECT "stateJson" FROM "AutomationState"`;
+    expect(JSON.parse(committed[0].stateJson).tasks[2].title).toBe(
+      "Edited draft",
+    );
+    const task = (await service.readWorkspace("owner", "agency")).state
+      .tasks[2];
+    expect(
+      success(
+        await command({
+          type: "reschedule_task",
+          taskId: task.id,
+          expectedTaskVersion: task.version,
+          dueAt: "2026-12-05T12:00:00Z",
+          reason: "Owner moved the draft.",
+        }),
+      ).state.tasks[2].version,
+    ).toBe(task.version + 1);
+  });
+  it("prunes automation entries for a deleted project instead of failing to load", async () => {
+    await db.$executeRaw`DELETE FROM "TaskDependency"`;
+    await db.$executeRaw`DELETE FROM "Task" WHERE "projectId"='sample-project'`;
+    await db.$executeRaw`DELETE FROM "Project" WHERE "id"='sample-project'`;
+    const view = await service.readWorkspace("owner", "agency");
+    expect(view.state.tasks).toHaveLength(0);
+    expect(view.state.workflows).toHaveLength(0);
+    const next = success(await command({ type: "refresh_growth" }));
+    expect(next.state.tasks).toHaveLength(0);
+    expect((await service.readWorkspace("owner", "agency")).state).toEqual(
+      next.state,
+    );
+  });
 });
 describe("session-derived automation boundary", () => {
   it("requires the mutation boundary even on retries and never accepts a browser owner id", async () => {

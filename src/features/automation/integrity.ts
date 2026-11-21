@@ -4,6 +4,28 @@ import {
   type OwnedContext,
 } from "./contracts";
 
+// Core Task/Project rows are the source of truth: entries for deleted core
+// records are dropped from the loaded view and committed by the next mutation.
+export function reconcileOwned(
+  state: AutomationState,
+  context: OwnedContext,
+): AutomationState {
+  const projects = new Set(context.projectIds);
+  state.tasks = state.tasks.filter(
+    (t) => !t.projectId || projects.has(t.projectId),
+  );
+  const tasks = new Set(state.tasks.map((t) => t.id));
+  for (const task of state.tasks)
+    task.dependencies = task.dependencies.filter((id) => tasks.has(id));
+  state.workflows = state.workflows
+    .map((w) => ({ ...w, taskIds: w.taskIds.filter((id) => tasks.has(id)) }))
+    .filter((w) => projects.has(w.projectId) && w.taskIds.length);
+  state.occurrences = state.occurrences.filter((o) => tasks.has(o.taskId));
+  for (const recommendation of state.recommendations)
+    if (recommendation.linkedTaskId && !tasks.has(recommendation.linkedTaskId))
+      recommendation.linkedTaskId = null;
+  return state;
+}
 export function assertAutomationIntegrity(
   state: AutomationState,
   context: OwnedContext,

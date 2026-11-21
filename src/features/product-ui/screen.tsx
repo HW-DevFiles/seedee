@@ -23,17 +23,22 @@ export function Screen({
       : value;
   return (
     <div className="space-y-8">
-      {preview && (
+      {(preview || source?.origin === "sample") && (
         <aside
-          aria-label="Sample preview disclosure"
+          aria-label={
+            preview
+              ? "Sample preview disclosure"
+              : "Sample workspace disclosure"
+          }
           className="rounded-2xl border border-primary bg-sage/50 p-5"
         >
           <p className="font-semibold text-heading">
             Demo preview · Sample data · Not actual business performance
           </p>
           <p className="mt-2 text-sm leading-relaxed">
-            You are exploring fictional records. Preview forms cannot save or
-            export these as your evidence.
+            {preview
+              ? "You are exploring fictional records. Preview forms cannot save or export these as your evidence."
+              : "This is a synthetic workspace. Saved changes and exports retain sample labels and never become actual business traction."}
           </p>
           <Link
             href="/app"

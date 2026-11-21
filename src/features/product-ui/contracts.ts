@@ -39,8 +39,11 @@ export type FormSpec = {
   description?: string;
   submit: string;
   fields: Field[];
+  screenKey?: string;
+  projectId?: string;
   recordId?: string;
   version?: number;
+  recordVersions?: Record<string, number>;
   confirmation?: string;
   unavailableReason?: string;
 };

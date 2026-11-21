@@ -8,11 +8,11 @@ const steps = [
   },
   {
     title: "Give it a shape",
-    copy: "The planned agency builder will help you review an offer, a crew, and a way of working.",
+    copy: "Review your agency draft, scoped offers, simulated crew, and delivery workflow.",
   },
   {
     title: "Grow with intention",
-    copy: "Future planning tools will help you organize the work and evidence behind your company story.",
+    copy: "Organize projects, review internal crew output, and build an evidence-backed company story.",
   },
 ];
 

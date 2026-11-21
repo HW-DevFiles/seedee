@@ -38,7 +38,7 @@ Preserve the educational boundary near finance controls and exports: “Educatio
 
 ## Evidence in the platform package
 
-The package supplies executable environment/fixture safety tests, a local CLI/reconnect rehearsal, an actual production-startup probe and a container launch/restart CI job. The foundation still has labeled Agency, Crew, Projects, Growth and Investor Readiness placeholders at this package's base revision. Their full walkthrough remains pending integration of the feature packages and Ellis's recorded browser evidence. The repository's CI run and the worker's validation handoff must provide results for the exact reviewed commit; this document deliberately does not pre-check unrun gates.
+The package supplies executable environment/fixture safety tests, a local CLI/reconnect rehearsal, an actual production-startup probe and a container launch/restart CI job. The integration branch replaces the foundation placeholders with connected services and records combined-schema, form-adapter and local production-browser evidence in [INTEGRATION.md](INTEGRATION.md). Ellis's independent release review and the shipping pipeline remain separate gates. The repository's CI run and the worker's validation handoff must provide results for the exact reviewed commit; this document deliberately does not pre-check unrun gates.
 
 No public hosting, production migration, live AI/payment integration or distribution of promo material is part of this package. Keep the release private for owner review until the remaining integration gates are satisfied.
 

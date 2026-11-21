@@ -371,14 +371,14 @@ export function refreshGrowth(
   const liveKeys = new Set<string>();
   for (const taskId of ctx.growth.overdueTaskIds) {
     if (!state.tasks.some((t) => t.id === taskId)) {
-      liveKeys.add(`overdue:${taskId}`);
-      notify(
-        state,
-        "overdue_task",
-        `overdue:${taskId}`,
-        { type: "task", id: taskId },
-        at,
-      );
+      const deadline = ctx.growth.overdueTasks?.find(
+        (t) => t.id === taskId,
+      )?.dueAt;
+      const key = deadline
+        ? `overdue:${taskId}:${checkedInstant(deadline).toISOString()}`
+        : `overdue:${taskId}`;
+      liveKeys.add(key);
+      notify(state, "overdue_task", key, { type: "task", id: taskId }, at);
     }
   }
   const priorRecommendations = state.recommendations;
@@ -403,11 +403,13 @@ export function refreshGrowth(
       task.status !== "done" &&
       task.status !== "cancelled"
     ) {
-      liveKeys.add(`overdue:${task.id}:${task.dueAt}`);
+      liveKeys.add(
+        `overdue:${task.id}:${checkedInstant(task.dueAt).toISOString()}`,
+      );
       notify(
         state,
         "overdue_task",
-        `overdue:${task.id}:${task.dueAt}`,
+        `overdue:${task.id}:${checkedInstant(task.dueAt).toISOString()}`,
         { type: "task", id: task.id },
         at,
       );

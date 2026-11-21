@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { automationStateSchema } from "../automation/state-schema";
 import { factSchema } from "@/lib/ai/contracts";
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import {
@@ -872,19 +873,70 @@ export function createWorkspaceService(
                 "conflict",
                 "This project transition is unavailable.",
               );
-            if (
-              v.status === "completed" &&
-              (await tx.task.count({
+            if (v.status === "completed") {
+              const pending = await tx.task.findMany({
                 where: {
                   projectId: row.id,
+                  agencyId,
                   status: { notIn: ["done", "cancelled"] },
                 },
-              }))
-            )
-              throw new DomainError(
-                "conflict",
-                "Finish or explicitly cancel outstanding tasks first.",
-              );
+                include: { predecessors: { include: { predecessor: true } } },
+              });
+              const aggregate = pending.length
+                ? await tx.automationState.findUnique({
+                    where: { agencyId },
+                  })
+                : null;
+              const automation =
+                aggregate && aggregate.stateJson !== "{}"
+                  ? automationStateSchema.parse(JSON.parse(aggregate.stateJson))
+                  : null;
+              const administrativeCloseout = (
+                task: (typeof pending)[number],
+              ) => {
+                if (
+                  !automation ||
+                  automation.agencyId !== agencyId ||
+                  automation.version !== aggregate!.version
+                )
+                  return false;
+                const saved = automation.tasks.find(
+                  (t) =>
+                    t.id === task.id &&
+                    t.projectId === row.id &&
+                    t.kind === "closeout" &&
+                    t.version === task.version &&
+                    t.status === task.status,
+                );
+                const workflow = saved?.workflowId
+                  ? automation.workflows.find(
+                      (f) =>
+                        f.id === saved.workflowId &&
+                        f.projectId === row.id &&
+                        f.taskIds.at(-1) === task.id,
+                    )
+                  : null;
+                return Boolean(
+                  saved &&
+                  workflow &&
+                  automation.deliveries.some((d) => d.projectId === row.id) &&
+                  saved.dependencies.length &&
+                  saved.dependencies.length === task.predecessors.length &&
+                  task.predecessors.every(
+                    (p) =>
+                      saved.dependencies.includes(p.predecessorId) &&
+                      p.predecessor.agencyId === agencyId &&
+                      p.predecessor.projectId === row.id &&
+                      p.predecessor.status === "done",
+                  ),
+                );
+              };
+              if (pending.some((task) => !administrativeCloseout(task)))
+                throw new DomainError(
+                  "conflict",
+                  "Finish or explicitly cancel outstanding delivery and review tasks first.",
+                );
+            }
             const saved = await tx.project.update({
               where: { id: row.id, version: v.expectedVersion },
               data: {

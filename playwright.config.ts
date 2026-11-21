@@ -21,17 +21,24 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   reporter: "list",
-  use: { baseURL: `http://127.0.0.1:${port}`, trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
-    command: `npm run db:deploy && npm run ${productionServer ? "start" : "dev"} -- --hostname 127.0.0.1 --port ${port}`,
-    url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: false,
-    timeout: 120000,
-    env: {
-      DATABASE_URL: databaseUrl,
-      AI_PROVIDER: "demo",
-      NEXT_TELEMETRY_DISABLED: "1",
-    },
+  use: {
+    baseURL: process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}`,
+    ignoreHTTPSErrors: process.env.E2E_EXTERNAL_SERVER === "1",
+    trace: "retain-on-failure",
   },
+  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  webServer:
+    process.env.E2E_EXTERNAL_SERVER === "1"
+      ? undefined
+      : {
+          command: `npm run db:deploy && npm run ${productionServer ? "start" : "dev"} -- --hostname 127.0.0.1 --port ${port}`,
+          url: `http://127.0.0.1:${port}`,
+          reuseExistingServer: false,
+          timeout: 120000,
+          env: {
+            DATABASE_URL: databaseUrl,
+            AI_PROVIDER: "demo",
+            NEXT_TELEMETRY_DISABLED: "1",
+          },
+        },
 });

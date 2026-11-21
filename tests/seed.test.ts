@@ -11,7 +11,12 @@ function freshDatabase(name: string) {
   const url = `file:${join(directory, `${name}.db`)}`;
   const run = (...args: string[]) =>
     spawnSync(process.execPath, args, {
-      env: { ...process.env, DATABASE_URL: url, NODE_ENV: "test" },
+      env: {
+        ...process.env,
+        DATABASE_URL: url,
+        NODE_ENV: "test",
+        DEMO_ACCOUNT_ENABLED: "true",
+      },
       encoding: "utf8",
     });
   expect(

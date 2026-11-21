@@ -142,6 +142,7 @@ export type GrowthFacts = {
     deliveryCostMinor: number | null;
   }[];
   overdueTaskIds: string[];
+  overdueTasks?: { id: string; dueAt: string }[];
   reviewedSopIds: string[];
   capacity: {
     evidenceId: string;

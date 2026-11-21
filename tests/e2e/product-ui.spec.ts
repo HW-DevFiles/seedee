@@ -15,7 +15,7 @@ async function createAccount(page: import("@playwright/test").Page) {
   await expect(page).toHaveURL(/\/app$/);
 }
 
-test("fresh workspace keeps unknown evidence and explains unavailable service actions", async ({
+test("fresh workspace keeps unknown evidence and enables saved onboarding", async ({
   page,
 }) => {
   await page.goto("/app/investor-readiness/data-room");
@@ -26,7 +26,7 @@ test("fresh workspace keeps unknown evidence and explains unavailable service ac
   ).toBeVisible();
   await expect(page.getByLabel("Sample preview disclosure")).toHaveCount(0);
   await page
-    .getByRole("link", { name: "Describe your practice", exact: true })
+    .getByRole("link", { name: "Describe your creative practice", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "Start with your craft." }),
@@ -44,10 +44,7 @@ test("fresh workspace keeps unknown evidence and explains unavailable service ac
     await expect(page.getByLabel(practice, { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Save practice & goals" }),
-  ).toBeDisabled();
-  await expect(
-    page.getByText(/Saving is unavailable in this preview/),
-  ).toBeVisible();
+  ).toBeEnabled();
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Start with your craft." }),

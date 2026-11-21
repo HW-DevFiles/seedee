@@ -16,7 +16,9 @@ test("sign up, reach the dashboard, sign out and sign back in", async ({
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/app$/);
   await expect(
-    page.getByRole("heading", { name: "Welcome, Smoke Creative." }),
+    page.getByRole("heading", {
+      name: "Welcome, Smoke Creative.",
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Your agency starts with you" }),
@@ -30,7 +32,10 @@ test("sign up, reach the dashboard, sign out and sign back in", async ({
     .getByRole("link", { name: "Projects", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Projects", exact: true }),
+    page.getByRole("heading", {
+      name: "From a good brief to a considered delivery.",
+      exact: true,
+    }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
@@ -42,6 +47,8 @@ test("sign up, reach the dashboard, sign out and sign back in", async ({
     .fill("A smoke test password!");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Welcome, Smoke Creative." }),
+    page.getByRole("heading", {
+      name: "Welcome, Smoke Creative.",
+    }),
   ).toBeVisible();
 });

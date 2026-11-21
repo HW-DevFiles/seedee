@@ -1,3 +1,5 @@
+import { db } from "@/lib/db";
+import { WorkspaceEntry } from "@/features/integration/entry";
 import { AppShell } from "@/components/ui/app-shell";
 import { requireUser } from "@/lib/auth/session";
 
@@ -11,5 +13,14 @@ export default async function WorkspaceLayout({
   children: React.ReactNode;
 }) {
   const user = await requireUser();
-  return <AppShell userName={user.name}>{children}</AppShell>;
+  const agency = await db.agency.findUnique({
+    where: { ownerId: user.id },
+    select: { id: true },
+  });
+  return (
+    <AppShell userName={user.name}>
+      {agency && <WorkspaceEntry agencyId={agency.id} />}
+      {children}
+    </AppShell>
+  );
 }

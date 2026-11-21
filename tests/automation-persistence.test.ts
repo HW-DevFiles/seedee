@@ -75,7 +75,6 @@ beforeAll(async () => {
   });
   // The agreed schema is provisioned only in this isolated contract test until
   // Kuba's shared migration lands. This never modifies the development database.
-  await db.$executeRaw`CREATE TABLE "AutomationState" ("agencyId" TEXT NOT NULL PRIMARY KEY REFERENCES "Agency"("id") ON DELETE CASCADE, "version" INTEGER NOT NULL DEFAULT 0, "stateJson" TEXT NOT NULL DEFAULT '{}', "updatedAt" DATETIME NOT NULL)`;
   await db.$executeRaw`CREATE TABLE "TestCoreTask" ("id" TEXT NOT NULL PRIMARY KEY, "status" TEXT NOT NULL)`;
 });
 afterAll(async () => {

@@ -18,6 +18,8 @@ export async function ProductPage({
     route.key,
     query?.preview === "sample",
     route.recordId,
+    route.projectId,
+    query,
   );
   if (!view) notFound();
   return <Screen view={view} action={productAction} />;

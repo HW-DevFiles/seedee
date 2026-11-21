@@ -80,12 +80,22 @@ beforeAll(async () => {
   });
   // Executable SQL contract for the core fields handed off by Kuba; replaced
   // by the shared migration in the assembled-branch verification.
-  await db.$executeRaw`CREATE TABLE "AutomationState" ("agencyId" TEXT NOT NULL PRIMARY KEY REFERENCES "Agency"("id") ON DELETE CASCADE,"version" INTEGER NOT NULL DEFAULT 0,"stateJson" TEXT NOT NULL DEFAULT '{}',"updatedAt" DATETIME NOT NULL)`;
-  await db.$executeRaw`CREATE TABLE "Project" ("id" TEXT NOT NULL PRIMARY KEY,"agencyId" TEXT NOT NULL,"status" TEXT NOT NULL,"archivedAt" DATETIME)`;
-  await db.$executeRaw`CREATE TABLE "ProjectCloseout" ("projectId" TEXT NOT NULL PRIMARY KEY,"agencyId" TEXT NOT NULL)`;
-  await db.$executeRaw`CREATE TABLE "Task" ("id" TEXT NOT NULL PRIMARY KEY,"agencyId" TEXT NOT NULL,"projectId" TEXT,"title" TEXT NOT NULL,"input" TEXT NOT NULL,"assignedRoleKey" TEXT,"status" TEXT NOT NULL,"priority" TEXT NOT NULL,"dueAt" DATETIME,"originalCommittedDueAt" DATETIME,"dueDateHistory" JSONB NOT NULL,"acceptedAt" DATETIME,"cancellationRecord" JSONB,"approvedArtifact" JSONB,"reviewNeeded" BOOLEAN NOT NULL,"version" INTEGER NOT NULL,"createdAt" DATETIME NOT NULL,"updatedAt" DATETIME NOT NULL)`;
-  await db.$executeRaw`CREATE TABLE "TaskDependency" ("taskId" TEXT NOT NULL REFERENCES "Task"("id"),"predecessorId" TEXT NOT NULL REFERENCES "Task"("id"),PRIMARY KEY("taskId","predecessorId"))`;
-  await db.$executeRaw`INSERT INTO "Project" ("id","agencyId","status") VALUES ('sample-project','agency','active'),('archived-project','agency','archived')`;
+  await db.project.createMany({
+    data: [
+      {
+        id: "sample-project",
+        agencyId: "agency",
+        title: "Sample project",
+        status: "active",
+      },
+      {
+        id: "archived-project",
+        agencyId: "agency",
+        title: "Archived project",
+        status: "archived",
+      },
+    ],
+  });
 });
 afterAll(async () => {
   await db.$disconnect();

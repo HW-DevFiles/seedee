@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { SecurityError, safeError } from "@/lib/security/errors";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { hashToken } from "@/lib/auth/tokens";
 import { DomainError, type Result } from "./contracts";
@@ -74,6 +75,8 @@ export async function consumeExportLimit(
     );
 }
 export function safeFailure(error: unknown): Result<never> {
+  if (error instanceof SecurityError)
+    return { ok: false, error: safeError(error) };
   if (error instanceof DomainError)
     return {
       ok: false,

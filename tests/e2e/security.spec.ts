@@ -49,7 +49,9 @@ test("two browser sessions see only their own account and sign-out revokes acces
   page,
   browser,
 }) => {
-  const secondContext = await browser.newContext();
+  const secondContext = await browser.newContext({
+    ignoreHTTPSErrors: process.env.E2E_EXTERNAL_SERVER === "1",
+  });
   const secondPage = await secondContext.newPage();
   try {
     for (const [current, name] of [
@@ -57,7 +59,8 @@ test("two browser sessions see only their own account and sign-out revokes acces
       [secondPage, "Second Private Creative"],
     ] as const) {
       await current.goto(
-        "http://127.0.0.1:" + (process.env.E2E_PORT ?? "3100") + "/sign-up",
+        (process.env.E2E_BASE_URL ??
+          "http://127.0.0.1:" + (process.env.E2E_PORT ?? "3100")) + "/sign-up",
       );
       await current.getByLabel("Your name").fill(name);
       await current

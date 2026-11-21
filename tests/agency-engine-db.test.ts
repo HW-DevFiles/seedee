@@ -75,12 +75,7 @@ beforeAll(async () => {
     ["node_modules/prisma/build/index.js", "migrate", "deploy"],
     { env: { ...process.env, DATABASE_URL: url }, stdio: "pipe" },
   );
-  // Executable cross-package SQL fixture: Kuba owns the actual shared migration.
-  await db.$executeRaw`CREATE TABLE "AgencyEngineState" ("id" TEXT PRIMARY KEY REFERENCES "User"("id") ON DELETE CASCADE,"agencyId" TEXT UNIQUE REFERENCES "Agency"("id") ON DELETE CASCADE,"version" INTEGER NOT NULL DEFAULT 0,"payload" TEXT NOT NULL DEFAULT '{}',"updatedAt" DATETIME NOT NULL)`;
-  await db.$executeRaw`CREATE TABLE "Project" ("id" TEXT PRIMARY KEY,"agencyId" TEXT NOT NULL,"status" TEXT NOT NULL DEFAULT 'active',"archivedAt" DATETIME)`;
-  await db.$executeRaw`CREATE TABLE "Task" ("id" TEXT PRIMARY KEY,"agencyId" TEXT NOT NULL,"projectId" TEXT,"status" TEXT NOT NULL DEFAULT 'queued',"version" INTEGER NOT NULL DEFAULT 0)`;
-  await db.$executeRaw`CREATE TABLE "TaskDependency" ("taskId" TEXT NOT NULL,"predecessorId" TEXT NOT NULL,PRIMARY KEY("taskId","predecessorId"))`;
-  await db.$executeRaw`CREATE TABLE "EvidenceItem" ("id" TEXT PRIMARY KEY,"agencyId" TEXT NOT NULL,"version" INTEGER NOT NULL DEFAULT 1,"value" JSONB NOT NULL,"provenance" JSONB NOT NULL)`;
+  // Core tables come from the combined production migrations.
   await db.$executeRaw`CREATE TABLE "TestRunEvents" ("key" TEXT PRIMARY KEY,"status" TEXT NOT NULL)`;
   await db.user.createMany({
     data: [
@@ -104,14 +99,32 @@ beforeAll(async () => {
       { id: "other-agency", ownerId: "other", name: "Other studio" },
     ],
   });
-  await db.$executeRaw`INSERT INTO "Project" ("id","agencyId") VALUES ('project','agency'),('other-project','other-agency')`;
+  await db.project.createMany({
+    data: [
+      { id: "project", agencyId: "agency", title: "Project", status: "active" },
+      {
+        id: "other-project",
+        agencyId: "other-agency",
+        title: "Other project",
+        status: "active",
+      },
+    ],
+  });
 });
 afterAll(async () => {
   await db.$disconnect();
   rmSync(directory, { recursive: true, force: true });
 });
 async function task(id: string) {
-  await db.$executeRaw`INSERT INTO "Task" ("id","agencyId","projectId") VALUES (${id},'agency','project')`;
+  await db.task.create({
+    data: {
+      id,
+      agencyId: "agency",
+      projectId: "project",
+      title: id,
+      version: 0,
+    },
+  });
   return {
     agencyId: "agency",
     taskId: id,
@@ -271,7 +284,16 @@ describe("SQLite engine persistence and same-transaction task projection", () =>
     await expect(
       engine().queueRun("owner", { ...command, projectId: "other-project" }),
     ).rejects.toMatchObject({ code: "forbidden_or_missing" });
-    await db.$executeRaw`INSERT INTO "Task" ("id","agencyId","projectId","status") VALUES ('foreign','other-agency','other-project','done')`;
+    await db.task.create({
+      data: {
+        id: "foreign",
+        agencyId: "other-agency",
+        projectId: "other-project",
+        title: "Foreign task",
+        version: 0,
+        status: "done",
+      },
+    });
     await db.$executeRaw`INSERT INTO "TaskDependency" ("taskId","predecessorId") VALUES ('scope','foreign')`;
     await expect(engine().queueRun("owner", command)).rejects.toMatchObject({
       code: "forbidden_or_missing",
@@ -299,7 +321,21 @@ describe("SQLite engine persistence and same-transaction task projection", () =>
       formulaVersion: "agency-finance-v1.1",
       reviewStatus: "owner_attested" as const,
     };
-    await db.$executeRaw`INSERT INTO "EvidenceItem" ("id","agencyId","value","provenance") VALUES ('fact','agency',${JSON.stringify({ pitchFact: fact })},${JSON.stringify({ origin: fact.origin, asOf: `${fact.asOf}T00:00:00Z`, sourceReference: fact.sourceRef, reviewStatus: fact.reviewStatus })})`;
+    await db.evidenceItem.create({
+      data: {
+        id: "fact",
+        agencyId: "agency",
+        category: "financials",
+        metricKey: "revenue",
+        value: { pitchFact: fact },
+        provenance: {
+          origin: fact.origin,
+          asOf: `${fact.asOf}T00:00:00Z`,
+          sourceReference: fact.sourceRef,
+          reviewStatus: fact.reviewStatus,
+        },
+      },
+    });
     const command = {
       agencyId: "agency",
       idempotencyKey: "pitch-fact",

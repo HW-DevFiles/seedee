@@ -137,7 +137,17 @@ export function ActionForm({
   action: FormAction;
   preview?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(action, {});
+  const requestKey = useRef<string | null>(null);
+  const [state, formAction, pending] = useActionState(
+    async (previous: import("./contracts").ActionState, data: FormData) => {
+      requestKey.current ??= crypto.randomUUID();
+      data.set("idempotencyKey", requestKey.current);
+      const result = await action(previous, data);
+      if (result.status === "success") requestKey.current = null;
+      return result;
+    },
+    {},
+  );
   const prefix = useId();
   const summary = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -148,12 +158,12 @@ export function ActionForm({
   return (
     <form
       action={formAction}
-      aria-labelledby={`${prefix}-title`}
+      aria-labelledby={`${prefix}-form-title`}
       aria-busy={pending}
       className="space-y-5"
     >
       <div>
-        <h2 id={`${prefix}-title`} className="font-display text-2xl">
+        <h2 id={`${prefix}-form-title`} className="font-display text-2xl">
           {spec.title}
         </h2>
         {spec.description && (
@@ -162,11 +172,21 @@ export function ActionForm({
         <p className="mt-2 text-sm">Fields marked * are required.</p>
       </div>
       <input type="hidden" name="command" value={spec.id} />
+      <input type="hidden" name="screenKey" value={spec.screenKey ?? ""} />
+      <input type="hidden" name="projectId" value={spec.projectId ?? ""} />
+      <input type="hidden" name="idempotencyKey" value="" />
       {spec.recordId && (
         <input type="hidden" name="recordId" value={spec.recordId} />
       )}
       {spec.version !== undefined && (
         <input type="hidden" name="expectedVersion" value={spec.version} />
+      )}
+      {spec.recordVersions && (
+        <input
+          type="hidden"
+          name="recordVersions"
+          value={JSON.stringify(spec.recordVersions)}
+        />
       )}
       {preview && <input type="hidden" name="preview" value="sample" />}
       <fieldset
@@ -249,6 +269,13 @@ export function ActionForm({
       >
         {pending ? "Working…" : spec.submit}
       </Button>
+      {spec.recordVersions && (
+        <input
+          type="hidden"
+          name="recordVersions"
+          value={JSON.stringify(spec.recordVersions)}
+        />
+      )}
       {preview && (
         <p className="text-sm">
           Sample preview. This form cannot change your workspace.

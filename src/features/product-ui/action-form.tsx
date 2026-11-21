@@ -269,13 +269,6 @@ export function ActionForm({
       >
         {pending ? "Working…" : spec.submit}
       </Button>
-      {spec.recordVersions && (
-        <input
-          type="hidden"
-          name="recordVersions"
-          value={JSON.stringify(spec.recordVersions)}
-        />
-      )}
       {preview && (
         <p className="text-sm">
           Sample preview. This form cannot change your workspace.

@@ -1,0 +1,15 @@
+node_modules/
+src/generated/prisma/
+.next/
+out/
+coverage/
+playwright-report/
+test-results/
+.env*
+!.env.example
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.tsbuildinfo
+.DS_Store

@@ -11,7 +11,7 @@ concurrency:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       DATABASE_URL: file:./prisma/ci.db
       AI_PROVIDER: demo
@@ -36,7 +36,12 @@ jobs:
       - run: npm run build
       - run: npm run platform:runtime-check
       - run: npx playwright install --with-deps chromium
+      # Release acceptance runs against the production build above, behind
+      # the loopback HTTPS harness, so secure cookies and origin checks apply.
       - run: npm run test:e2e
+        env:
+          E2E_PRODUCTION: "1"
+          E2E_OUTPUT_DIR: test-results
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

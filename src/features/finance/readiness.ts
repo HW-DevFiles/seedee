@@ -727,3 +727,53 @@ export function emptyReadiness(
   });
 }
 export type ReadinessResult = ReturnType<typeof scoreReadiness>;
+
+const PROVISIONAL = "Provisional · ";
+// C4 read-time freshness for an immutable saved snapshot. Points, coverage
+// and evaluatedAt never change; only the Provisional label is re-derived at
+// the caller's explicit `now`. Completeness reasons come from the saved input
+// and output, not from the stored Boolean, which may hold a historical age.
+export function readinessFreshness(
+  savedInput: unknown,
+  saved: Pick<ReadinessResult, "asOf" | "coveragePercent" | "stage">,
+  now: string,
+) {
+  const input = { ...(savedInput as Record<string, unknown>) };
+  delete input.actualVersions;
+  delete input.evidenceVersions;
+  const parsed = readinessSchema.safeParse(input);
+  const asOf = new Date(saved.asOf),
+    n = new Date(now);
+  const asOfDay = Date.UTC(
+    asOf.getUTCFullYear(),
+    asOf.getUTCMonth(),
+    asOf.getUTCDate(),
+  );
+  const ageDays = Math.floor(
+    (Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) - asOfDay) /
+      86400000,
+  );
+  const reasons: string[] = [];
+  if (new D(saved.coveragePercent).lt(80)) reasons.push("coverage_below_80");
+  if (!parsed.success) reasons.push("saved_input_unreadable");
+  else if (
+    monthsEnding(asOf, 6).some(
+      (period) =>
+        !parsed.data.months.some(
+          (m) => m.period === period && m.closed && m.revenueMinor !== null,
+        ),
+    )
+  )
+    reasons.push("fewer_than_six_closed_months");
+  if (ageDays > 45) reasons.push("older_than_45_days");
+  const base = saved.stage.startsWith(PROVISIONAL)
+    ? saved.stage.slice(PROVISIONAL.length)
+    : saved.stage;
+  return {
+    provisional: reasons.length > 0,
+    reasons,
+    ageDays,
+    assessedAt: n.toISOString(),
+    stage: `${reasons.length ? PROVISIONAL : ""}${base}`,
+  };
+}

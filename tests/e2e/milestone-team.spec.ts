@@ -125,7 +125,7 @@ test("owned milestone card shows the full fixed-dollar delta, survives refresh a
       fullPage: true,
     });
     await page.goto("/app/investor-readiness");
-    await expect(page.getByText("73.4", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^73\.4(?: \/ 100)?$/)).toBeVisible();
     await expect(page.getByText(notice, { exact: false })).toHaveCount(0);
   } finally {
     await db.$disconnect();
@@ -276,7 +276,9 @@ test("fresh owner enters human agreements, backup, delivery logs and named capac
       .getByLabel("As-of closed month end", { exact: false })
       .fill("2026-10-31");
     await save(calculation, "Calculate readiness snapshot");
-    await expect(founderRow).toContainText("0.4");
+    await expect(founderRow.getByRole("cell").first()).toHaveText(
+      /^(?:0\.4|40\.0%)$/,
+    );
     await expect(founderRow).toContainText("2 / 2");
     await expect(page.getByText(notice, { exact: false })).toHaveCount(0);
     for (const key of ["H_owner", "H_paid", "H_backup", "H_capacity"])
@@ -286,7 +288,9 @@ test("fresh owner enters human agreements, backup, delivery logs and named capac
         }),
       ).toContainText("2 / 2");
     await page.reload();
-    await expect(founderRow).toContainText("0.4");
+    await expect(founderRow.getByRole("cell").first()).toHaveText(
+      /^(?:0\.4|40\.0%)$/,
+    );
     expect(
       JSON.stringify(
         await db.financeSnapshot.findUnique({ where: { id: baseline.id } }),

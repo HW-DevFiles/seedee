@@ -150,6 +150,7 @@ it("loads only an owned versioned baseline and persists only a separate proposal
       "sample",
       "sample-agency",
     ),
+    readAt: now,
     userName: "Sample",
     context: { userId: "sample" },
   } as IntegratedRead;
@@ -319,6 +320,7 @@ it("renders one missing-founder notice for an owner's new snapshot and no sample
       "other",
       "other-agency",
     ),
+    readAt: now,
     userName: "Other",
     context: { userId: "other" },
   } as IntegratedRead;

@@ -57,6 +57,7 @@ async function probe(
   );
   let output = "";
   let exited = false;
+  let answered = false;
   child.stdout.on("data", (chunk) => {
     output += String(chunk);
   });
@@ -79,11 +80,19 @@ async function probe(
           output.includes(expectedError),
           `Expected startup rejection ${expectedError}: ${output}`,
         );
-        assert(
-          !output.includes("Ready in"),
-          "Unsafe server must never become ready",
-        );
+        // Next prints "Ready" before loading config, so assert on HTTP instead.
+        assert(!answered, "Unsafe server must never answer a request");
         return;
+      }
+      if (expectedError && output.includes("Ready in")) {
+        try {
+          await fetch(`http://127.0.0.1:${port}/sign-in`, {
+            signal: AbortSignal.timeout(1000),
+          });
+          answered = true;
+        } catch {
+          // Connection refused or timed out: nothing served.
+        }
       }
       if (!expectedError && output.includes("Ready in")) {
         const response = await fetch(`http://127.0.0.1:${port}/sign-in`, {

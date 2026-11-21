@@ -107,7 +107,7 @@ export const readinessSchema = z
           id,
           isFounder: z.boolean(),
           simulated: z.boolean(),
-          compensationMinor: cents,
+          compensationMinor: cents.nullable(),
           agreementStart: dateTime,
           agreementEnd: dateTime.nullable(),
           role: text,

@@ -1244,6 +1244,14 @@ export function createWorkspaceService(
                   )
                 : null;
             expected(old, v.expectedVersion);
+            if (
+              v.data.metricKey === "readiness_team" ||
+              old?.metricKey === "readiness_team"
+            )
+              throw new DomainError(
+                "invalid_input",
+                "Use the typed team-evidence command for these records.",
+              );
             validateProvenance(v.data.provenance, now, old?.provenance);
             if (v.data.sourceRecordId) {
               const ref = v.data.sourceRecordId;

@@ -13,8 +13,9 @@ import {
   actualSchema,
   type Provenance,
 } from "../workspace/contracts";
+import { readinessBaseline } from "../finance/milestone";
 import { emptyReadiness } from "../finance/readiness";
-import { readinessSchema, forecastSchema } from "../finance/contracts";
+import { forecastSchema } from "../finance/contracts";
 import { monthsEnding, D } from "../finance/decimal";
 import { pitchFacts } from "./view";
 import type { IntegratedRead } from "./read";
@@ -468,6 +469,66 @@ export async function executeProductCommand(
         },
       });
     }
+    case "team.human":
+    case "team.backup":
+    case "team.hours":
+    case "team.capacity":
+    case "team.owner": {
+      const kind = type.split(".")[1];
+      const data =
+        kind === "human"
+          ? {
+              id: s("entryId"),
+              role: s("role"),
+              isFounder: input.isFounder === true,
+              simulated: false,
+              compensationMinor: n("compensationMinor"),
+              agreementStart: iso(input.agreementStart),
+              agreementEnd: iso(input.agreementEnd),
+            }
+          : kind === "backup"
+            ? {
+                serviceId: s("serviceId"),
+                humanId: s("humanId"),
+                acceptedAt: iso(input.acceptedAt),
+              }
+            : kind === "hours"
+              ? {
+                  humanId: s("humanId"),
+                  date: iso(input.deliveryDate),
+                  hours: n("hours"),
+                }
+              : kind === "capacity"
+                ? {
+                    id: s("entryId"),
+                    period: s("period"),
+                    availableHours: n("availableHours"),
+                    plannedHours: n("plannedHours"),
+                    attestedAt: iso(input.attestedAt),
+                    humanIds: strings(input.humanIds),
+                    serviceIds: lines(input.serviceIds),
+                  }
+                : { note: s("note"), asOf: iso(input.asOfDate) };
+      return finance.command({
+        type: "finance.team",
+        input: {
+          entryId: s("entryId"),
+          expectedVersion:
+            meta.recordVersions?.[`${kind}:${s("entryId")}`] ?? null,
+          record: { kind, data },
+          provenance: provenance(input.asOfDate, input.sourceReference),
+        },
+      });
+    }
+    case "milestone.preview":
+      return finance.command({
+        type: "finance.milestone",
+        input: {
+          baselineId: s("baselineId"),
+          milestone: s("milestone"),
+          revenueMinor: [n("revenue1"), n("revenue2"), n("revenue3")],
+        },
+      });
     case "readiness.create": {
       const asOf = iso(input.asOfDate)!;
       const prior = w.snapshots.find(
@@ -479,12 +540,7 @@ export async function executeProductCommand(
         asOf,
         w.agency?.sampleWorkspace ? "sample" : "user_entered",
       );
-      if (prior) {
-        const saved = { ...(prior.input as Record<string, unknown>) };
-        delete saved.actualVersions;
-        delete saved.evidenceVersions;
-        v = readinessSchema.parse(saved);
-      }
+      if (prior) v = readinessBaseline(prior.input);
       v.months = w.actuals
         .filter((r) => monthsEnding(new Date(asOf), 6).includes(r.yearMonth))
         .map((r) => {

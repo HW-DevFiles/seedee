@@ -11,6 +11,8 @@ import { factSchema, roleSchema } from "@/lib/ai/contracts";
 import { z } from "zod";
 import { actualSchema, provenanceSchema } from "../workspace/contracts";
 import { scoreReadiness } from "../finance/readiness";
+import { teamRecords } from "../finance/team";
+import { milestoneTitle, type MilestonePreview } from "../finance/milestone";
 import { D, money } from "../finance/decimal";
 import { calculateEquity } from "../finance/equity";
 import { forecast } from "../finance/forecast";
@@ -58,6 +60,7 @@ export function connectedScreen(
   const screen = structuredClone(screens[key]);
   if (!screen) return null;
   screen.cards = [];
+  screen.notices ??= [];
   const packageRow = w.packages.find((p) => p.id === recordId),
     client = w.clients.find((c) => c.id === recordId),
     project = w.projects.find((p) => p.id === recordId),
@@ -485,6 +488,85 @@ export function connectedScreen(
       ),
     );
   }
+  if (key === "growth") {
+    const baselines = w.snapshots.filter(
+      (s) => s.kind === "readiness" && s.formulaVersion === "readiness-v1.1",
+    );
+    screen.forms?.unshift(
+      form(
+        "milestone.preview",
+        "Preview milestone impact",
+        [
+          field("baselineId", "Saved readiness baseline", {
+            type: "select",
+            options: baselines.map((s) => ({
+              value: s.id,
+              label: `${date(s.asOf)} · ${s.formulaVersion} · ${s.id}`,
+            })),
+            value: baselines[0]?.id,
+          }),
+          field("milestone", "Milestone", {
+            type: "select",
+            options: [
+              { value: "revenue_fixed_dollars", label: milestoneTitle },
+            ],
+            value: "revenue_fixed_dollars",
+          }),
+          ...[1, 2, 3].map((i) =>
+            field(
+              `revenue${i}`,
+              `Target earned revenue: recent month ${i} (USD)`,
+              {
+                type: "money",
+                hint: "In chronological order within the baseline’s last three closed months.",
+              },
+            ),
+          ),
+        ],
+        {
+          description:
+            "If achieved and evidenced; hypothetical only. Package and retainer dollars stay fixed. A preview saves a separate proposal and does not complete a milestone or change actual readiness.",
+          unavailableReason: baselines.length
+            ? undefined
+            : "Evidence needed: save a readiness snapshot before previewing a milestone.",
+        },
+      ),
+    );
+    const saved = w.snapshots.find(
+      (s) =>
+        s.kind === "readiness_proposal" &&
+        s.formulaVersion === "readiness-v1.1",
+    );
+    if (saved) {
+      const p = saved.output as unknown as MilestonePreview;
+      screen.cards?.push({
+        id: saved.id,
+        title: p.title,
+        body: p.label,
+        status: "Hypothetical proposal",
+        details: [
+          { label: "Baseline score", value: p.baseline.score },
+          { label: "Hypothetical score", value: p.hypothetical.score },
+          {
+            label: "Full total delta",
+            value: `${new D(p.totalDelta).gte(0) ? "+" : ""}${p.totalDelta}`,
+          },
+          {
+            label: "Proposed target",
+            value: p.targets
+              .map((t) => `${t.period}: ${displayMinor(t.revenueMinor)}`)
+              .join("; "),
+          },
+          {
+            label: "Source snapshot / version",
+            value: `${p.sourceSnapshotId} · ${p.sourceVersion}`,
+          },
+          { label: "Evaluation clock", value: p.evaluatedAt },
+          { label: "Assumptions", value: p.assumptions.join(" ") },
+        ],
+      });
+    }
+  }
   const readiness = w.snapshots.find(
     (s) => s.kind === "readiness" && s.formulaVersion === "readiness-v1.1",
   );
@@ -527,9 +609,152 @@ export function connectedScreen(
     screen.notices?.push({
       title: "Risk and evidence limits",
       body:
-        output.riskFlags.join("; ") ||
+        [
+          output.riskFlags.join("; "),
+          ...(output.components.some(
+            (c) => c.key === "H_founder" && c.rawValue === null,
+          )
+            ? [
+                "Founder delivery workload and replacement cost not entered; founder dependence is unknown.",
+              ]
+            : []),
+        ]
+          .filter(Boolean)
+          .join("; ") ||
         "Review the missing evidence before relying on this snapshot.",
     });
+  }
+  if (key === "readiness" && w.agency) {
+    const origin = w.agency.sampleWorkspace ? "sample" : "user_entered";
+    const records = teamRecords(w.evidence, origin);
+    const humanOptions = records.flatMap((r) =>
+      r.record.kind === "human"
+        ? [
+            {
+              value: r.record.data.id,
+              label: `${r.record.data.id} · ${r.record.data.role}`,
+            },
+          ]
+        : [],
+    );
+    const common = [
+      field("asOfDate", "Evidence as-of date", { type: "date" }),
+      field("sourceReference", "Agreement, log or source reference"),
+    ];
+    const entry = field("entryId", "Evidence record key", {
+      hint: "Use the same key to record a corrected version. Earlier snapshots remain unchanged.",
+    });
+    screen.forms?.push(
+      form(
+        "team.human",
+        "Record human and compensation agreement",
+        [
+          entry,
+          field("role", "Human role"),
+          field("isFounder", "This human is a founder", {
+            type: "checkbox",
+            required: false,
+          }),
+          field("compensationMinor", "Agreed compensation (USD per month)", {
+            type: "money",
+            required: false,
+            hint: "Leave blank if unknown. Enter 0 only for known unpaid work.",
+          }),
+          field("agreementStart", "Agreement start", { type: "date" }),
+          field("agreementEnd", "Agreement end", {
+            type: "date",
+            required: false,
+          }),
+          ...common,
+        ],
+        {
+          description:
+            "Record real humans with documented roles and compensation. Simulated crew never counts as human capacity.",
+        },
+      ),
+      form("team.backup", "Record accepted nonfounder backup", [
+        entry,
+        field("serviceId", "Material service key"),
+        field("humanId", "Backup human", {
+          type: "select",
+          options: humanOptions,
+        }),
+        field("acceptedAt", "Backup acceptance date", { type: "date" }),
+        ...common,
+      ]),
+      form("team.hours", "Log human delivery hours", [
+        entry,
+        field("humanId", "Delivery human", {
+          type: "select",
+          options: humanOptions,
+        }),
+        field("deliveryDate", "Delivery work date", { type: "date" }),
+        field("hours", "Delivery hours", {
+          type: "number",
+          min: 0,
+          step: "any",
+        }),
+        ...common,
+      ]),
+      form("team.capacity", "Record named paid capacity pool", [
+        entry,
+        field("period", "Capacity month", { type: "month" }),
+        field("humanIds", "Paid humans in this pool", {
+          type: "multiselect",
+          options: humanOptions,
+        }),
+        field("serviceIds", "Covered material service keys", {
+          type: "textarea",
+          hint: "One service key per line. Each human belongs in only one pool for this month.",
+        }),
+        field("availableHours", "Pool available hours", {
+          type: "number",
+          min: 0,
+          step: "any",
+        }),
+        field("plannedHours", "Pool planned hours", {
+          type: "number",
+          min: 0,
+          step: "any",
+        }),
+        field("attestedAt", "Pool attestation date", { type: "date" }),
+        ...common,
+      ]),
+      form("team.owner", "Record accountable human owner", [
+        entry,
+        field("note", "Accountability and responsibilities", {
+          type: "textarea",
+        }),
+        ...common,
+      ]),
+    );
+    screen.notices?.push({
+      title: "Team evidence and saved readiness",
+      body: "Team records are owner-reported evidence. After saving, calculate a new readiness snapshot for the relevant closed month. Existing snapshots and hypothetical proposals stay unchanged.",
+    });
+    screen.tables?.push(
+      table(
+        "Saved team evidence",
+        ["Kind", "Record key", "Supplied facts", "As of"],
+        records.map((r) => ({
+          id: r.sourceId,
+          cells: [
+            r.record.kind,
+            r.entryId,
+            r.record.kind === "human"
+              ? `${r.record.data.role} · ${r.record.data.isFounder ? "Founder" : "Nonfounder"} · ${r.record.data.compensationMinor === null ? "Compensation unknown" : displayMinor(r.record.data.compensationMinor) + "/month"} · agreement ${date(r.record.data.agreementStart)}–${date(r.record.data.agreementEnd) || "ongoing"}`
+              : r.record.kind === "hours"
+                ? `${r.record.data.humanId}: ${r.record.data.hours} hours on ${date(r.record.data.date)}`
+                : r.record.kind === "backup"
+                  ? `${r.record.data.humanId} accepted ${r.record.data.serviceId} on ${date(r.record.data.acceptedAt)}`
+                  : r.record.kind === "capacity"
+                    ? `${r.record.data.period}: ${r.record.data.plannedHours ?? "Unknown"} planned / ${r.record.data.availableHours ?? "Unknown"} available hours; humans ${r.record.data.humanIds.join(", ")}; services ${r.record.data.serviceIds.join(", ")}`
+                    : r.record.data.note,
+            date(r.provenance.asOf),
+          ],
+        })),
+      ),
+    );
   }
   const forecasts = w.snapshots.filter(
     (s) => s.kind === "forecast" && s.formulaVersion === "agency-finance-v1.1",
@@ -876,6 +1101,13 @@ export function connectedScreen(
       if (allowed[f.id] && !allowed[f.id].includes(run.status))
         f.unavailableReason = `This action is unavailable while the run is ${run.status.replaceAll("_", " ")}.`;
     }
+    if (f.id.startsWith("team."))
+      f.recordVersions = Object.fromEntries(
+        teamRecords(
+          w.evidence,
+          w.agency?.sampleWorkspace ? "sample" : "user_entered",
+        ).map((r) => [`${r.record.kind}:${r.entryId}`, r.version]),
+      );
     if (f.id === "agency.generate" && !w.onboarding)
       f.unavailableReason = "Save your creative practice and goals first.";
     if (["agency.accept", "agency.draft.edit"].includes(f.id) && !draft)

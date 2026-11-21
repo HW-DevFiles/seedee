@@ -1,5 +1,5 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "@/generated/prisma/client";
 import { z } from "zod";
 import {
@@ -34,12 +34,24 @@ import {
   SAMPLE_BANNER,
 } from "./contracts";
 import { scoreReadiness } from "./readiness";
+import {
+  milestoneSchema,
+  previewMilestone,
+  readinessBaseline,
+} from "./milestone";
+import {
+  teamCommandSchema,
+  validateTeamReferences,
+  applyTeamEvidence,
+} from "./team";
 import { forecast, financialCsv } from "./forecast";
 import { calculateEquity } from "./equity";
 import { buildFacts } from "./facts";
 import { D, money } from "./decimal";
 
 export const financeCommandSchemas = {
+  "finance.milestone": milestoneSchema,
+  "finance.team": teamCommandSchema,
   "finance.readiness": z.object({ input: readinessSchema }),
   "finance.forecast": z.object({
     name: z.string().trim().min(1).max(100),
@@ -124,11 +136,138 @@ export function createFinanceService(
           now = clock(),
           agencyId = agency.id;
         switch (command.type) {
+          case "finance.team": {
+            const { expectedVersion, ...v } = teamCommandSchema.parse(
+              command.input,
+            );
+            validateProvenance(v.provenance, now);
+            if ((v.provenance.origin === "sample") !== agency.sampleWorkspace)
+              throw new DomainError(
+                "invalid_input",
+                "Keep sample and owner-entered team evidence separate.",
+              );
+            const rows = await tx.evidenceItem.findMany({
+              where: { agencyId },
+            });
+            validateTeamReferences(v, rows, now);
+            const recordId = createHash("sha256")
+              .update(JSON.stringify([agencyId, v.record.kind, v.entryId]))
+              .digest("hex");
+            const old = await tx.evidenceItem.findFirst({
+              where: { id: recordId, agencyId },
+            });
+            const payload = json({ content: v });
+            if (old && JSON.stringify(old.value) === JSON.stringify(payload))
+              return old;
+            if (
+              old ? old.version !== expectedVersion : expectedVersion !== null
+            )
+              throw new DomainError(
+                "conflict",
+                "Team evidence changed. Reload before recording a correction.",
+              );
+            const services = await tx.servicePackage.findMany({
+              where: { agencyId },
+              select: { id: true },
+            });
+            const saved = await tx.financeSnapshot.findMany({
+              where: {
+                agencyId,
+                kind: "readiness",
+                formulaVersion: READINESS_VERSION,
+              },
+            });
+            const serviceIds = new Set([
+              ...services.map((s) => s.id),
+              ...saved.flatMap((s) => {
+                try {
+                  return (readinessBaseline(s.input).recognition ?? []).map(
+                    (l) => l.serviceId,
+                  );
+                } catch {
+                  return [];
+                }
+              }),
+            ]);
+            const referencedServices =
+              v.record.kind === "backup"
+                ? [v.record.data.serviceId]
+                : v.record.kind === "capacity"
+                  ? v.record.data.serviceIds
+                  : [];
+            if (referencedServices.some((service) => !serviceIds.has(service)))
+              throw new DomainError(
+                "forbidden_or_missing",
+                "Choose an owned material service.",
+              );
+            const data = {
+              category: "product_operations",
+              metricKey: "readiness_team",
+              value: payload,
+              provenance: json(v.provenance),
+            };
+            return old
+              ? tx.evidenceItem.update({
+                  where: { id: old.id, version: expectedVersion! },
+                  data: { ...data, version: { increment: 1 } },
+                })
+              : tx.evidenceItem.create({
+                  data: { ...data, id: recordId, agencyId },
+                });
+          }
+          case "finance.milestone": {
+            const v = milestoneSchema.parse(command.input);
+            const baseline = await tx.financeSnapshot.findFirst({
+              where: {
+                id: v.baselineId,
+                agencyId,
+                kind: "readiness",
+                formulaVersion: READINESS_VERSION,
+              },
+            });
+            if (!baseline)
+              throw new DomainError(
+                "forbidden_or_missing",
+                "Saved readiness baseline is unavailable.",
+              );
+            const output = previewMilestone(
+              baseline.input,
+              v.revenueMinor,
+              now.toISOString(),
+            );
+            return tx.financeSnapshot.create({
+              data: {
+                agencyId,
+                kind: "readiness_proposal",
+                formulaVersion: READINESS_VERSION,
+                asOf: baseline.asOf,
+                evaluatedAt: now,
+                input: json(v),
+                output: json({
+                  ...output,
+                  sourceSnapshotId: baseline.id,
+                  sourceVersion: baseline.formulaVersion,
+                }),
+                provenance: json({
+                  ...provenanceSchema.parse(baseline.provenance),
+                  origin:
+                    provenanceSchema.parse(baseline.provenance).origin ===
+                    "sample"
+                      ? "sample"
+                      : "assumption",
+                }),
+              },
+            });
+          }
           case "finance.readiness": {
-            const { input } = financeCommandSchemas[command.type].parse(
-                command.input,
-              ),
-              p = validateProvenance(input.provenance, now);
+            const parsed = financeCommandSchemas[command.type].parse(
+              command.input,
+            );
+            const teamRows = await tx.evidenceItem.findMany({
+              where: { agencyId, metricKey: "readiness_team" },
+            });
+            const input = applyTeamEvidence(parsed.input, teamRows);
+            const p = validateProvenance(input.provenance, now);
             const actuals = await tx.financialActualPeriod.findMany({
               where: { agencyId },
             });

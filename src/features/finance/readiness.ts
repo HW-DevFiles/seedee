@@ -353,6 +353,7 @@ export function scoreReadiness(raw: unknown, now: string) {
   const humans = v.humans?.filter(
     (h) =>
       !h.simulated &&
+      h.compensationMinor !== null &&
       h.compensationMinor > 0 &&
       new Date(h.agreementStart) <= end &&
       (!h.agreementEnd || new Date(h.agreementEnd) >= end),
@@ -380,9 +381,13 @@ export function scoreReadiness(raw: unknown, now: string) {
     .map(([k]) => k);
   const materialServices = material.length
     ? material
-    : (v.capacity ?? [])
-        .filter((c) => c.plannedHours !== null && c.plannedHours > 0)
-        .map((c) => c.id);
+    : [
+        ...new Set(
+          (v.capacity ?? [])
+            .filter((c) => c.plannedHours !== null && c.plannedHours > 0)
+            .flatMap((c) => (c.serviceIds.length ? c.serviceIds : [c.id])),
+        ),
+      ];
   const backup =
     materialServices.length > 0 &&
     materialServices.every((serviceId) =>
@@ -455,11 +460,17 @@ export function scoreReadiness(raw: unknown, now: string) {
         )
         .map((l) => l.hours) ?? [],
     );
-  const founderShare = allHours.gt(0) ? founderHours.div(allHours) : null;
+  const founderKnown = logs?.some((l) =>
+    v.humans?.some((h) => h.id === l.humanId && h.isFounder && !h.simulated),
+  );
+  const founderShare =
+    logValid && founderKnown && allHours.gt(0)
+      ? founderHours.div(allHours)
+      : null;
   add(
     "H_founder",
     2,
-    v.deliveryHours !== null && !!logValid,
+    v.deliveryHours !== null && !!logValid && !!founderKnown && allHours.gt(0),
     founderShare && founderShare.lte("0.6") ? 2 : 0,
     founderShare?.toString() ?? null,
     "fraction",
@@ -467,7 +478,20 @@ export function scoreReadiness(raw: unknown, now: string) {
     "Founder share at most 60%",
     logs?.map((l) => l.sourceId) ?? [],
   );
-  if (founderHours.gt(0) && !humans?.some((h) => h.isFounder))
+  if (
+    logValid &&
+    logs?.some(
+      (l) =>
+        l.hours > 0 &&
+        v.humans?.some(
+          (h) =>
+            h.id === l.humanId &&
+            h.isFounder &&
+            !h.simulated &&
+            (h.compensationMinor === 0 || h.compensationMinor === null),
+        ),
+    )
+  )
     flags.push("founder_unpaid_labor");
   checked(
     "I_chain",

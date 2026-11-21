@@ -168,7 +168,9 @@ describe("transactional automation repository", () => {
       });
     expect(await routines("routines-first")).toMatchObject({ ok: true });
     const stored = async () =>
-      db.$queryRaw<{ version: number; stateJson: string }[]>`SELECT "version", "stateJson" FROM "AutomationState" WHERE "agencyId" = 'agency'`;
+      db.$queryRaw<
+        { version: number; stateJson: string }[]
+      >`SELECT "version", "stateJson" FROM "AutomationState" WHERE "agencyId" = 'agency'`;
     const before = await stored();
     expect(await routines("routines-noop")).toMatchObject({
       ok: true,

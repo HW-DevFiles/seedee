@@ -69,6 +69,23 @@ describe("account and session boundary", () => {
     );
   });
 
+  it("refuses sign-up at the reserved demo fixture address", async () => {
+    await expect(
+      registerUser(
+        db,
+        {
+          name: "Not The Demo",
+          email: " Demo@Seedee.Local ",
+          password: "SeedeeDemo!2026",
+        },
+        ip,
+      ),
+    ).rejects.toThrow("Unable to create an account");
+    expect(
+      await db.user.findUnique({ where: { email: "demo@seedee.local" } }),
+    ).toBeNull();
+  });
+
   it("authenticates the password and uses the same error for unknown accounts and wrong passwords", async () => {
     const user = await authenticateUser(db, credentials, ip);
     expect(user.email).toBe(credentials.email);

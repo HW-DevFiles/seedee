@@ -304,3 +304,44 @@ it("validates and persists typed team evidence with retry identity, revisions an
     }),
   ).rejects.toMatchObject({ code: "invalid_input" });
 });
+
+it("renders one missing-founder notice for an owner's new snapshot and no sample fallback", async () => {
+  const input = emptyReadiness(provenance.asOf);
+  await createFinanceService(db, "other", clock).command({
+    type: "finance.readiness",
+    input: { input },
+  });
+  const services = createIntegratedServices(db);
+  const data = {
+    workspace: await createWorkspaceService(db, "other").readWorkspace(),
+    engine: await services.engine.readWorkspace("other", "other-agency"),
+    automation: await services.automation.readWorkspace(
+      "other",
+      "other-agency",
+    ),
+    userName: "Other",
+    context: { userId: "other" },
+  } as IntegratedRead;
+  const view = connectedScreen(data, "readiness")!.screen;
+  expect(
+    view.notices!.filter((n) =>
+      n.body.includes(
+        "Founder delivery workload and replacement cost not entered; founder dependence is unknown.",
+      ),
+    ),
+  ).toHaveLength(1);
+  expect(view.tables![0].rows.find((r) => r.id === "H_founder")!.cells).toEqual(
+    ["H_founder", "Unknown", "0 / 2", "missing_or_invalid_evidence"],
+  );
+});
+it("requires an explicit founder log before showing a zero founder share", () => {
+  const v = sampleReadiness();
+  v.deliveryHours = v.deliveryHours!.filter((l) => l.humanId !== "founder");
+  const r = scoreReadiness(v, now);
+  expect(r.components.find((c) => c.key === "H_founder")).toMatchObject({
+    rawValue: null,
+    availability: false,
+    points: "0",
+  });
+  expect(r.riskFlags).not.toContain("founder_unpaid_labor");
+});

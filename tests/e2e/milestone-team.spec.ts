@@ -11,6 +11,9 @@ const form = (page: Page, title: string) =>
     .filter({ has: page.getByRole("heading", { name: title, exact: true }) });
 async function save(target: Locator, title: string) {
   await target.getByRole("button", { name: title, exact: true }).click();
+  await expect(
+    target.getByRole("button", { name: title, exact: true }),
+  ).toBeEnabled();
   await expect(target.getByRole("status")).toContainText("Saved.");
 }
 async function evidence(target: Locator, key: string) {
@@ -173,11 +176,9 @@ test("fresh owner enters human agreements, backup, delivery logs and named capac
       .getByLabel("As-of closed month end", { exact: false })
       .fill("2026-10-31");
     await save(calculation, "Calculate readiness snapshot");
-    const founderRow = page
-      .getByRole("row")
-      .filter({
-        has: page.getByRole("cell", { name: "H_founder", exact: true }),
-      });
+    const founderRow = page.getByRole("row").filter({
+      has: page.getByRole("rowheader", { name: "H_founder", exact: true }),
+    });
     await expect(founderRow).toContainText("Unknown");
     await expect(founderRow).toContainText("0 / 2");
     await expect(page.getByText(notice, { exact: false })).toHaveCount(1);
@@ -271,15 +272,18 @@ test("fresh owner enters human agreements, backup, delivery logs and named capac
       .getByLabel("Accountability and responsibilities", { exact: false })
       .fill("Founder owns delivery, reviews and agency decisions.");
     await save(owner, "Record accountable human owner");
+    await calculation
+      .getByLabel("As-of closed month end", { exact: false })
+      .fill("2026-10-31");
     await save(calculation, "Calculate readiness snapshot");
     await expect(founderRow).toContainText("0.4");
     await expect(founderRow).toContainText("2 / 2");
     await expect(page.getByText(notice, { exact: false })).toHaveCount(0);
     for (const key of ["H_owner", "H_paid", "H_backup", "H_capacity"])
       await expect(
-        page
-          .getByRole("row")
-          .filter({ has: page.getByRole("cell", { name: key, exact: true }) }),
+        page.getByRole("row").filter({
+          has: page.getByRole("rowheader", { name: key, exact: true }),
+        }),
       ).toContainText("2 / 2");
     await page.reload();
     await expect(founderRow).toContainText("0.4");

@@ -60,6 +60,7 @@ export function connectedScreen(
   const screen = structuredClone(screens[key]);
   if (!screen) return null;
   screen.cards = [];
+  screen.notices ??= [];
   const packageRow = w.packages.find((p) => p.id === recordId),
     client = w.clients.find((c) => c.id === recordId),
     project = w.projects.find((p) => p.id === recordId),

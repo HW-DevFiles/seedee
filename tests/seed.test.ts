@@ -63,12 +63,13 @@ describe("local seed scripts", () => {
           passwordHash: "unused-test-hash",
         },
       });
-      expect(fresh.seed()).toBe(0);
+      expect(fresh.seed()).not.toBe(0);
       expect(fresh.seedDomain()).not.toBe(0);
-      const agency = await db.agency.findUniqueOrThrow({
-        where: { ownerId: user.id },
-      });
-      expect(agency.sampleWorkspace).toBe(false);
+      expect(await db.user.findMany()).toEqual([user]);
+      expect(await db.agency.count()).toBe(0);
+      expect(
+        await db.agency.findUnique({ where: { id: "seedee-demo-agency-v1" } }),
+      ).toBeNull();
       expect(await db.servicePackage.count()).toBe(0);
     } finally {
       await db.$disconnect();

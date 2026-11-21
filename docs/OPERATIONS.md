@@ -22,13 +22,13 @@ SQLite defaults to `prisma/dev.db`. For a separate rehearsal, set `DATABASE_URL=
 
 `src/lib/env.ts` is the shared schema. Next validates it at configuration load and at Node runtime registration. Errors list variable names, never their values.
 
-| Variable               | Default                | Accepted values                                                                           |
-| ---------------------- | ---------------------- | ----------------------------------------------------------------------------------------- |
-| `NODE_ENV`             | `development`          | `development`, `test`, `production` (Next sets its mode)                                  |
-| `DATABASE_URL`         | `file:./prisma/dev.db` | Persistent SQLite `file:` path, without URL query/fragment or whitespace; no in-memory DB |
-| `AI_PROVIDER`          | `demo`                 | `demo` only; unknown providers fail startup                                               |
-| `DEMO_ACCOUNT_ENABLED` | `false`                | Exact `true` or `false`; `.env.example` opts in for local use                             |
-| `TRUST_PROXY_HOPS`     | `0`                    | Integer 0–32; preserve Maximus/Theo's trusted-proxy boundary                              |
+| Variable               | Default                | Accepted values                                                                                                                                                 |
+| ---------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`             | `development`          | `development`, `test`, `production` (Next sets its mode)                                                                                                        |
+| `DATABASE_URL`         | `file:./prisma/dev.db` | Persistent SQLite `file:` path, without URL query/fragment or whitespace; no in-memory DB                                                                       |
+| `AI_PROVIDER`          | `demo`                 | `demo` only; unknown providers fail startup                                                                                                                     |
+| `DEMO_ACCOUNT_ENABLED` | `false`                | Exact `true` or `false`; `.env.example` opts in for local use                                                                                                   |
+| `TRUST_PROXY_HOPS`     | `0`                    | Integer 0–32; trusted reverse proxies in front of the app, `0` trusts no client IP (see [sign-in throttling](ARCHITECTURE.md#authentication-and-authorization)) |
 
 No payment, email, live model or remote storage key is needed. Live providers remain an implementation seam, not an environment switch that secretly calls a service. Routines use the service's injected request clock; there is no environment override that silently changes historical financial evidence.
 

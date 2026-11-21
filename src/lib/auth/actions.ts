@@ -8,6 +8,8 @@ import { authenticateUser, AuthError, registerUser } from "./service";
 import { clientIpFromForwardedFor } from "./client-ip";
 import { endSession, startSession } from "./session";
 import type { AuthState } from "./validation";
+import { requireMutationOrigin } from "@/lib/security/request";
+import { SecurityError, safeError } from "@/lib/security/errors";
 
 async function clientIp() {
   return clientIpFromForwardedFor(
@@ -17,6 +19,8 @@ async function clientIp() {
 }
 
 function errorState(error: unknown): AuthState {
+  if (error instanceof SecurityError)
+    return { error: safeError(error).message };
   if (error instanceof ZodError)
     return { error: error.issues[0]?.message ?? "Check your details." };
   if (error instanceof AuthError) return { error: error.message };
@@ -29,6 +33,7 @@ export async function signUp(
   formData: FormData,
 ): Promise<AuthState> {
   try {
+    await requireMutationOrigin();
     const user = await registerUser(
       db,
       Object.fromEntries(formData),
@@ -46,6 +51,7 @@ export async function signIn(
   formData: FormData,
 ): Promise<AuthState> {
   try {
+    await requireMutationOrigin();
     const user = await authenticateUser(
       db,
       Object.fromEntries(formData),
@@ -59,6 +65,7 @@ export async function signIn(
 }
 
 export async function signOut() {
+  await requireMutationOrigin();
   await endSession();
   redirect("/sign-in");
 }

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Brand } from "@/components/ui/brand";
 import { Badge, ButtonLink, Card } from "@/components/ui";
 
 const steps = [
@@ -8,11 +8,11 @@ const steps = [
   },
   {
     title: "Give it a shape",
-    copy: "The planned agency builder will help you review an offer, a crew, and a way of working.",
+    copy: "Review your agency draft, scoped offers, simulated crew, and delivery workflow.",
   },
   {
     title: "Grow with intention",
-    copy: "Future planning tools will help you organize the work and evidence behind your company story.",
+    copy: "Organize projects, review internal crew output, and build an evidence-backed company story.",
   },
 ];
 
@@ -20,13 +20,7 @@ export default function Home() {
   return (
     <>
       <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-7 sm:px-10">
-        <Link
-          href="/"
-          aria-label="Seedee home"
-          className="font-display text-4xl tracking-tight text-heading"
-        >
-          seedee.
-        </Link>
+        <Brand />
         <nav aria-label="Main" className="flex items-center gap-3 sm:gap-6">
           <a
             className="hidden text-sm font-semibold sm:block"

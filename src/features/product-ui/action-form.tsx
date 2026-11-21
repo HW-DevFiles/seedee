@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useId, useState } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import type { Field, FormAction, FormSpec } from "./contracts";
 
@@ -94,7 +94,13 @@ function FormField({
       ) : (
         <input
           {...props}
-          type={field.type ?? "text"}
+          type={field.type === "money" ? "text" : (field.type ?? "text")}
+          inputMode={field.type === "money" ? "decimal" : undefined}
+          pattern={
+            field.type === "money"
+              ? `${field.signed ? "-?" : ""}[0-9]+(\\.[0-9]{1,2})?`
+              : undefined
+          }
           min={field.min}
           max={field.max}
           step={field.step}
@@ -133,6 +139,11 @@ export function ActionForm({
 }) {
   const [state, formAction, pending] = useActionState(action, {});
   const prefix = useId();
+  const summary = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (state.status === "error" || state.status === "conflict")
+      summary.current?.focus();
+  }, [state]);
   const [confirmed, setConfirmed] = useState(false);
   return (
     <form
@@ -175,21 +186,40 @@ export function ActionForm({
         <label className="flex items-start gap-3 text-sm">
           <input
             type="checkbox"
+            id={`${prefix}-confirmed`}
             name="confirmed"
+            aria-invalid={Boolean(state.fieldErrors?.confirmed)}
             checked={confirmed}
             onChange={(event) => setConfirmed(event.target.checked)}
             className="mt-1 size-5 shrink-0 accent-primary"
             required
+            disabled={pending || Boolean(spec.unavailableReason)}
           />
           {spec.confirmation}
         </label>
       )}
-      {state.message && (
+      {(state.message || state.fieldErrors) && (
         <div
+          ref={summary}
+          tabIndex={-1}
           role={state.status === "success" ? "status" : "alert"}
           className={`rounded-xl border p-4 text-sm leading-relaxed ${state.status === "success" ? "border-primary bg-sage/40" : "border-danger text-danger"}`}
         >
-          <p>{state.message}</p>
+          <p>{state.message ?? "Check the highlighted fields."}</p>
+          {state.fieldErrors && (
+            <ul className="mt-3 list-disc space-y-2 pl-5">
+              {Object.entries(state.fieldErrors).map(([name, message]) => (
+                <li key={name}>
+                  <a
+                    href={`#${prefix}-${name}`}
+                    className="font-semibold underline underline-offset-4"
+                  >
+                    {message}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
           {state.status === "conflict" && (
             <p className="mt-2">
               Reload this page to review the current record before submitting
@@ -217,7 +247,7 @@ export function ActionForm({
           spec.unavailableReason ? `${prefix}-unavailable` : undefined
         }
       >
-        {pending ? "Saving…" : spec.submit}
+        {pending ? "Working…" : spec.submit}
       </Button>
       {preview && (
         <p className="text-sm">

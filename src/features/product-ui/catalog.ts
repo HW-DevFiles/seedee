@@ -32,12 +32,14 @@ const money = (
   name: string,
   label: string,
   extra: Partial<Field> = {},
-): Field =>
-  number(name, `${label} (USD cents)`, {
-    hint: "Enter whole cents: 12500 means $125.00. Leave an unknown amount blank.",
-    required: false,
-    ...extra,
-  });
+): Field => ({
+  name,
+  label: `${label} (USD)`,
+  type: "money",
+  required: false,
+  hint: "Enter dollars, such as 125.00. Leave an unknown amount blank.",
+  ...extra,
+});
 const form = (
   id: string,
   title: string,
@@ -101,8 +103,8 @@ export const onboardingFields: Field[] = [
   select(
     "fundingInterest",
     "Your growth path",
-    ["customer_funded", "exploring_options", "seed_preparation"],
-    { value: "exploring_options" },
+    ["customer_funded", "undecided", "exploring_seed"],
+    { value: "undecided" },
   ),
   note("existingOffers", "Existing offers or skills", { required: false }),
 ];
@@ -124,7 +126,7 @@ const packageFields: Field[] = [
     hint: "5000 means 50%. Must be below 10000; this assumption is not a market benchmark.",
   }),
   {
-    name: "explicitlyFree",
+    name: "freeSample",
     label: "This is explicitly free or sample work",
     type: "checkbox",
   },
@@ -132,11 +134,11 @@ const packageFields: Field[] = [
 const clientFields: Field[] = [
   text("name", "Client name", { maxLength: 120 }),
   text("organization", "Organization", { required: false, maxLength: 160 }),
-  text("economicClientGroupId", "Economic client group", {
+  text("economicGroupId", "Economic client group", {
     hint: "Use the same group for clients under common buying control.",
   }),
-  text("email", "Contact email", { required: false, type: "email" }),
-  note("notes", "Contact notes", {
+  text("contactEmail", "Contact email", { required: false, type: "email" }),
+  note("note", "Contact notes", {
     required: false,
     hint: "Internal notes only. Seedee does not contact this client.",
   }),
@@ -161,7 +163,7 @@ const projectFields: Field[] = [
 const taskFields: Field[] = [
   text("title", "Task title"),
   note("input", "Task brief"),
-  select("assignedRoleId", "Assignment", [], {
+  select("assignedRoleKey", "Assignment", [], {
     required: false,
     hint: "Leave blank to assign to yourself.",
   }),
@@ -170,7 +172,7 @@ const taskFields: Field[] = [
     value: "normal",
   }),
   {
-    name: "dependencyIds",
+    name: "predecessorIds",
     label: "Must happen first",
     type: "multiselect",
     options: [],
@@ -183,15 +185,20 @@ const actualFields: Field[] = [
     value: "manual",
     hint: "Manual totals and project-derived totals are alternatives; they are never added together.",
   }),
-  money("recognizedRevenueMinor", "Earned service revenue"),
+  money("recognizedRevenueMinor", "Earned service revenue", { signed: true }),
   money("cashReceiptsMinor", "Customer cash receipts"),
   money("deliveryCostsMinor", "Delivery cash costs"),
   money("overheadMinor", "Overhead cash costs"),
   money("founderPayMinor", "Founder compensation"),
   money("cashTaxPaymentsMinor", "Cash tax payments"),
   money("cashInterestPaymentsMinor", "Cash interest payments"),
-  money("cashMinor", "Closing unrestricted cash"),
+  money("cashMinor", "Closing unrestricted cash", { signed: true }),
   money("receivablesMinor", "Closing receivables"),
+  money("capexMinor", "Capital expenditure"),
+  money("principalPaymentsMinor", "Debt principal payments"),
+  money("financingMinor", "Financing cash received"),
+  money("ownerContributionsMinor", "Owner contributions"),
+  money("ownerDistributionsMinor", "Owner distributions"),
   text("sourceReference", "Source reference", { required: false }),
   text("asOfDate", "As-of date", { type: "date" }),
 ];
@@ -354,7 +361,7 @@ export const screens: Record<string, ScreenView> = {
         text("name", "Agency name"),
         note("positioning", "Positioning"),
         text("buyer", "Intended buyer"),
-        note("goals", "Creative and business goals"),
+        note("goal", "Creative and business goals"),
       ]),
       form(
         "package.create",
@@ -561,7 +568,7 @@ export const screens: Record<string, ScreenView> = {
       ),
       form("task.create", "Add a task", "Create task", taskFields),
       form(
-        "project.closeout",
+        "closeout.save",
         "Record project closeout",
         "Save closeout",
         [
@@ -582,7 +589,7 @@ export const screens: Record<string, ScreenView> = {
           select("recurrenceType", "Revenue recurrence", [
             "one_off",
             "contracted_retainer",
-            "unknown",
+            "repeat_purchase",
           ]),
           note("repeatabilityNotes", "Repeatability notes", {
             required: false,
@@ -970,7 +977,7 @@ export const screens: Record<string, ScreenView> = {
           "ownership",
           "financials",
           "customers",
-          "operations",
+          "product_operations",
           "ip_brand",
           "market",
           "risk_security",
@@ -991,13 +998,13 @@ export const screens: Record<string, ScreenView> = {
           "owner_attested",
           "externally_reviewed",
         ]),
-        text("reviewer", "Reviewer / reference", {
+        text("reviewer", "Reviewer", {
           required: false,
           hint: "External review requires supporting reviewer, date and evidence metadata. It is never inferred.",
         }),
       ]),
       form(
-        "checklist.update",
+        "checklist.save",
         "Review a checklist item",
         "Save checklist status",
         [
@@ -1006,7 +1013,7 @@ export const screens: Record<string, ScreenView> = {
             "ownership",
             "financials",
             "customers",
-            "operations",
+            "product_operations",
             "ip_brand",
             "market",
             "risk_security",

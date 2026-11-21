@@ -16,6 +16,7 @@ export type Field = {
     | "text"
     | "textarea"
     | "number"
+    | "money"
     | "date"
     | "month"
     | "email"
@@ -27,6 +28,7 @@ export type Field = {
   min?: number;
   max?: number;
   step?: number | "any";
+  signed?: boolean;
   maxLength?: number;
   value?: string | number | boolean | string[];
   options?: { value: string; label: string }[];

@@ -23,7 +23,7 @@ export async function readProductScreen(
         origin: "sample",
         asOf: "2026-10-31",
         review: "Not independently verified",
-        version: "Presentation fixture v1",
+        version: "Sample workspace v1",
       },
     };
   }
@@ -39,17 +39,17 @@ export async function readProductScreen(
   screen.forms = screen.forms?.map((form) => ({
     ...form,
     unavailableReason:
-      "This screen is ready for its domain service. Saving is unavailable in this frontend package until that integration lands. Nothing has been saved.",
+      "Saving is unavailable in this preview. Nothing has been saved.",
   }));
   screen.notices = [
     ...(screen.notices ?? []),
     {
       title: agency
-        ? "Service integration pending"
+        ? "Saved actions are not available yet"
         : "Create your agency first",
       body: agency
-        ? "This branch contains the product interface and foundation account data. Operational records and mutations are being connected by their feature owners."
-        : "Your account has no agency yet. Start with Creative Practice & Goals, then generate, review and explicitly accept an agency draft. The current frontend package does not fabricate an agency or business evidence.",
+        ? "This preview shows the workspace interface. Project records and saved actions are not available yet."
+        : "Your account has no agency yet. Start with Creative Practice & Goals, then generate, review and explicitly accept an agency draft. This preview does not create an agency or business evidence for you.",
     },
   ];
   return { mode: "empty", agencyName: agency?.name ?? null, screen };

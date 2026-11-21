@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Badge, ButtonLink, Card, EmptyState } from "@/components/ui";
+import { Badge, ButtonLink, Card } from "@/components/ui";
+import { RecordTable } from "./record-table";
 import { ActionForm } from "./action-form";
 import {
   EDUCATIONAL_BOUNDARY,
@@ -185,85 +186,8 @@ export function Screen({
           ))}
         </section>
       )}
-      {screen.tables?.map((table, index) => (
-        <section key={table.title} aria-labelledby={`table-${index}`}>
-          <h2 id={`table-${index}`} className="font-display text-2xl">
-            {table.title}
-          </h2>
-          {table.description && (
-            <p className="mt-2 text-sm leading-relaxed">{table.description}</p>
-          )}
-          {table.rows.length ? (
-            <>
-              <p id={`scroll-${index}`} className="mt-3 text-sm">
-                Scroll horizontally to view all columns on smaller screens.
-              </p>
-              <div
-                role="region"
-                aria-labelledby={`table-${index}`}
-                aria-describedby={`scroll-${index}`}
-                tabIndex={0}
-                className="mt-3 overflow-x-auto rounded-2xl border border-line"
-              >
-                <table className="w-full min-w-[600px] border-collapse text-left text-sm">
-                  <caption className="sr-only">{table.title}</caption>
-                  <thead className="bg-sage/50">
-                    <tr>
-                      {table.columns.map((column) => (
-                        <th
-                          key={column}
-                          scope="col"
-                          className="px-5 py-4 font-semibold text-heading"
-                        >
-                          {column}
-                        </th>
-                      ))}
-                      <th scope="col" className="px-5 py-4">
-                        <span className="sr-only">Open record</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line bg-white/50">
-                    {table.rows.map((row) => (
-                      <tr key={row.id}>
-                        {row.cells.map((cell, i) =>
-                          i === 0 ? (
-                            <th
-                              key={i}
-                              scope="row"
-                              className="px-5 py-4 font-medium"
-                            >
-                              {cell}
-                            </th>
-                          ) : (
-                            <td key={i} className="px-5 py-4 tabular-nums">
-                              {cell}
-                            </td>
-                          ),
-                        )}
-                        <td className="px-5 py-4">
-                          {row.href && (
-                            <Link
-                              href={href(row.href)}
-                              className="inline-block min-h-11 py-3 font-semibold underline underline-offset-4"
-                            >
-                              {row.linkLabel ?? "Open"}
-                              <span className="sr-only"> {row.cells[0]}</span>
-                            </Link>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <div className="mt-4">
-              <EmptyState title="Nothing here yet" description={table.empty} />
-            </div>
-          )}
-        </section>
+      {screen.tables?.map((table) => (
+        <RecordTable key={table.title} table={table} preview={preview} />
       ))}
       {screen.forms?.map((form) => (
         <Card key={form.id} className="max-w-3xl p-6 sm:p-8">

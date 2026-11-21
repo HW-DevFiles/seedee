@@ -129,7 +129,7 @@ export function sampleScreen(key: string): ScreenView {
   screen.forms = screen.forms?.map((form) => ({
     ...form,
     unavailableReason:
-      "This is a sample presentation fixture. Saving, reviewing, running and exporting require the connected service and your own authorized records.",
+      "This sample is read-only. Save, review, run and export actions are unavailable here. No workspace record will change.",
   }));
   const row = (id: string, cells: string[], href?: string) => ({
     id,
@@ -139,12 +139,12 @@ export function sampleScreen(key: string): ScreenView {
   if (key === "overview") {
     screen.title = "Good things take a little tending.";
     screen.description =
-      "Moss Studio · A fictional creative company. This presentation fixture shows how active work, human review and evidence fit together.";
+      "Moss Studio · A fictional creative company. This sample shows how active work, human review and evidence fit together.";
     screen.metrics = [
       {
         label: "Active projects",
         value: "1",
-        detail: "Fictional presentation record",
+        detail: "Fictional record",
         href: "/app/projects",
       },
       {
@@ -162,8 +162,7 @@ export function sampleScreen(key: string): ScreenView {
       {
         label: "Earned revenue",
         value: null,
-        detail:
-          "Connect a versioned actuals service to inspect the reference fixture",
+        detail: "Historical actuals are unavailable in this sample",
         href: "/app/investor-readiness/financials",
       },
     ];
@@ -411,7 +410,7 @@ export function sampleScreen(key: string): ScreenView {
       ...(screen.notices ?? []),
       {
         title: "Reference inputs, not calculated outputs",
-        body: "This UI fixture intentionally leaves scores, cash curves and ownership results uncomputed. The connected backend must call readiness-v1.1, agency-finance-v1.1 and dilution-education-v1.0 and return versioned results. Sample evidence is never copied into your actuals.",
+        body: "This sample shows how evidence and assumptions are organized. Calculated scores, cash projections and ownership results are unavailable in this preview. Sample evidence is never copied into your actuals.",
       },
     ];
   if (key === "readiness")

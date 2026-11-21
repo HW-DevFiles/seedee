@@ -79,6 +79,33 @@ or session side effect. Cookies retain HTTP-only, SameSite=Lax, path `/`, seven-
 expiry and Secure in production. Session rotation/revocation and comparable unknown
 account password work remain in the foundation.
 
+### Login delay and account availability
+
+Firstmate's follow-up security decision replaces the hard thirty-attempt email-only
+sign-in ceiling. A stranger could otherwise keep an owner locked out by repeatedly
+exhausting that counter before the owner's password was checked. Failed sign-ins
+now persist a capped failure count; subsequent requests wait 1, 2, 4, 8, 16, then at
+most 30 seconds before user/password lookup and verification. The delay is sampled
+once, not repeatedly extended by concurrent failures. A correct password still
+succeeds after that bounded wait unless the request itself exceeds a trusted-IP
+quota. Success clears the failure history. The fixed fifteen-minute window expires
+old failures. Unknown accounts receive the same policy and generic incorrect-email/
+password response. Waits are asynchronous and do not block the event loop.
+
+Registration uses a separate thirty-attempt per-email quota. It cannot poison the
+sign-in counter. Trusted email+IP and per-IP limits remain, successful sign-ups
+still consume those buckets, and successful sign-in preserves the existing IP
+reset semantics. Legacy email-only counter rows are no longer consulted; no schema
+migration is needed. Their eventual removal belongs to auth retention cleanup.
+
+This deliberately trades a hard account lock for bounded per-request friction.
+Sequential guessing slows, but many concurrent requests or rotating clients are
+not globally serialized by the account delay. Shared-IP users can still hit the
+explicit trusted-IP limits. Internet deployment needs connection/concurrency and
+edge abuse controls; this package does not claim distributed protection. The
+server-only `AuthTiming` seam allows deterministic clock/wait tests and is never
+accepted from a form, URL or credential payload.
+
 ### Generation and export quotas
 
 `consumeOperationLimit(db, { userId, clientIp, operation }, now?)` uses separate
@@ -199,7 +226,10 @@ the Server Action boundary.
 Verified locally on 2026-11-21 against foundation commit
 `4f3176fd7d2523c4160666631896c223d6303ba7`:
 
-- `npm test`: 76 passing tests across five files, including 63 security tests.
+- `npm test`: 80 passing tests across five files, including 63 shared security
+  tests and 15 account/session tests. The latter include the progressive-delay
+  correction, continued stranger attempts during an owner's bounded wait, and
+  retained trusted-IP/registration accounting.
 - `npm run typecheck`, `npm run lint`, `npm run format:check`: passed.
 - `NEXT_TELEMETRY_DISABLED=1 npm run build`: production Turbopack build passed.
 - `npm run test:e2e` with task-specific port 3196, temporary database and temporary

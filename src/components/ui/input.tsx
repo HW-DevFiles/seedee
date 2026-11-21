@@ -24,7 +24,7 @@ export function Input({
         name={name ?? id}
         aria-describedby={hintId}
         className={clsx(
-          "min-h-12 w-full rounded-xl border border-line bg-white px-4 py-3 text-base text-heading",
+          "min-h-12 w-full rounded-xl border border-control bg-white px-4 py-3 text-base text-heading",
           className,
         )}
         {...props}

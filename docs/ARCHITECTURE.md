@@ -23,7 +23,7 @@ Use `@/` for imports rooted in `src`. A feature should export a small service in
 
 ## Routes and rendering
 
-`/` introduces the product. `/sign-up` and `/sign-in` create or authenticate accounts. `/app` is the protected overview; `/app/agency`, `/app/crew`, `/app/projects`, `/app/growth`, and `/app/investor-readiness` are explicit placeholders. Feature owners can replace those page bodies and add nested routes without changing the shared shell. The authenticated overview shows only the current user's agency. New users have no agency; the seeded account has a clearly fictional sample studio.
+`/` introduces the product. `/sign-up` and `/sign-in` create or authenticate accounts. `/app` is the protected overview; `/app/agency`, `/app/crew`, `/app/projects`, `/app/growth`, `/app/investor-readiness`, and their nested routes (through `/app/[...path]`) render the `src/features/product-ui` screens described in [PRODUCT_UI.md](PRODUCT_UI.md). Feature owners bind services to those screens without changing the shared shell. The authenticated overview shows only the current user's agency. New users have no agency; the seeded account has a clearly fictional sample studio.
 
 Prefer Server Components for reads and small client islands for interaction. `getCurrentUser` uses React request-scoped caching to deduplicate session reads; do not place personalized queries in shared or persistent caches. Each page/service must authorize data access even though the layout also checks authentication. Do not return password hashes, session tokens, or other internal fields in client DTOs.
 
@@ -69,7 +69,7 @@ The idempotent seed creates a sample account and agency without overwriting an e
 1. Create `src/features/<name>` with typed input/output contracts and server-side services.
 2. Implement ownership checks at the service boundary. Use the authenticated user, not client-supplied ownership.
 3. Add any required models and a reviewed migration. Coordinate shared schema changes with other owners.
-4. Replace the corresponding placeholder route with a thin page that calls the service and renders feature UI. Add a Server Action for form writes, validating every request.
+4. Bind the corresponding product UI screen to the service through its adapter and form action (see [PRODUCT_UI.md](PRODUCT_UI.md#binding-the-services)); keep route files thin. Add a Server Action for form writes, validating every request.
 5. Add behavior tests for the feature's observable outputs and authorization failures. Extend the browser smoke flow only when it covers a meaningful user journey.
 6. Update the UI's preview labels only once the behavior actually works. Generated agency drafts require explicit acceptance before persistence; simulations must not imply real client work, traction, or external actions.
 
@@ -85,9 +85,9 @@ For a future live provider, implement the same interface in a server-only adapte
 
 ## Design system
 
-Tailwind v4 tokens are in `src/app/globals.css`: off-white `background` (#F8F6EF), hunter green `primary` (#355E3B), deep green `heading` (#1F3D2B), sage (#DCE6D5), ochre accent (#D6A84B), and a border token. Use deep/hunter green for text; ochre is an accent, not small text on off-white. Shared components provide Button/ButtonLink, labeled Input, Card, Badge, EmptyState, Nav, and AppShell. The typography scale uses responsive display/title sizes, readable body text, and 14px secondary text.
+Tailwind v4 tokens are in `src/app/globals.css`: off-white `background` (#F8F6EF), hunter green `primary` (#355E3B), deep green `heading` (#1F3D2B), sage (#DCE6D5), ochre accent (#D6A84B), danger (#922E25), and a border token. Use deep/hunter green for text; ochre is an accent, not small text on off-white. Shared components provide Button/ButtonLink, labeled Input, Card, Badge, EmptyState, Brand, Nav, WorkspaceNavigation, and AppShell. The typography scale uses responsive display/title sizes, readable body text, and 14px secondary text.
 
-The base uses local system sans/serif stacks so builds do not require a font download. Parker owns later brand font/asset integration. Interactive controls have keyboard focus indicators; navigation exposes its current page, forms label every field, error messages are alerts, and the layouts wrap on narrow screens. Verify contrast when adding accents and preserve WCAG AA text contrast.
+Body text uses the bundled Manrope fonts in `public/brand/fonts` and display text a local serif stack, so builds make no font service requests; see `public/brand/README.md` for asset provenance and licensing. Interactive controls have keyboard focus indicators; navigation exposes its current page, forms label every field, error messages are alerts, and the layouts wrap on narrow screens. Verify contrast when adding accents and preserve WCAG AA text contrast.
 
 ## Validation and scope limits
 

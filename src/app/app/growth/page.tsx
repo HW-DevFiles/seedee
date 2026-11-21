@@ -1,4 +1,8 @@
-import { WorkspacePlaceholder } from "@/components/workspace-placeholder";
-export default function Page() {
-  return <WorkspacePlaceholder slug="growth" />;
+import { ProductPage } from "@/features/product-ui/page";
+export default function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return <ProductPage path={["growth"]} searchParams={searchParams} />;
 }

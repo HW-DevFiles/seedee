@@ -52,6 +52,83 @@ const runArgs = (run: { id: string; version: number }, key: string) => ({
   idempotencyKey: key,
 });
 
+class ConflictOnSave extends FixtureEngineRepository {
+  calls = 0;
+  failAt = 0;
+  async transact<T>(
+    ...args: Parameters<FixtureEngineRepository["transact"]>
+  ): Promise<T> {
+    if (++this.calls === this.failAt)
+      throw new EngineError("conflict", "Workspace changed. Reload and retry.");
+    return super.transact<T>(...args);
+  }
+}
+function conflictSetup() {
+  const repo = new ConflictOnSave("owner", "agency", undefined, {
+    task: {
+      taskId: "task",
+      projectId: "project",
+      version: 0,
+      status: "queued",
+      dependenciesDone: true,
+    },
+  });
+  return { repo, engine: new AgencyEngine(repo, new DemoProvider(), clock) };
+}
+
+describe("save-time conflicts", () => {
+  it("propagates a draft save conflict without recording a provider failure", async () => {
+    const { repo, engine } = conflictSetup(),
+      command = { idempotencyKey: "draft", input: agencyFixture };
+    repo.failAt = 2;
+    await expect(engine.generateAgency("owner", command)).rejects.toMatchObject(
+      { code: "conflict" },
+    );
+    expect((await engine.readWorkspace("owner")).drafts[0]).toMatchObject({
+      status: "generating",
+      errorCode: null,
+    });
+    expect(await engine.generateAgency("owner", command)).toMatchObject({
+      status: "generated",
+      errorCode: null,
+    });
+  });
+  it("propagates a run save conflict and leaves the run resumable", async () => {
+    const { repo, engine } = conflictSetup();
+    const run = await engine.queueRun("owner", queue);
+    repo.failAt = repo.calls + 2;
+    const advance = { agencyId: "agency", runId: run.id };
+    await expect(engine.advanceRun("owner", advance)).rejects.toMatchObject({
+      code: "conflict",
+    });
+    expect(
+      (await engine.readWorkspace("owner", "agency")).runs[0],
+    ).toMatchObject({ status: "running", errorCode: null, attempt: 1 });
+    expect(await engine.advanceRun("owner", advance)).toMatchObject({
+      status: "awaiting_review",
+      attempt: 1,
+    });
+  });
+  it("propagates a pitch save conflict without recording a provider failure", async () => {
+    const { repo, engine } = conflictSetup(),
+      command = {
+        agencyId: "agency",
+        idempotencyKey: "pitch",
+        input: pitchFixture,
+      };
+    repo.failAt = 2;
+    await expect(engine.draftPitch("owner", command)).rejects.toMatchObject({
+      code: "conflict",
+    });
+    expect(
+      (await engine.readWorkspace("owner", "agency")).pitches[0],
+    ).toMatchObject({ status: "generating", errorCode: null });
+    expect(await engine.draftPitch("owner", command)).toMatchObject({
+      status: "generated",
+    });
+  });
+});
+
 describe("practice generation evaluations", () => {
   it.each(PRACTICES)(
     "makes a meaningful repeatable %s proposal with no network",
@@ -484,6 +561,68 @@ describe("private narrative and explanation evaluations", () => {
     expect(state.pitches).toHaveLength(3);
     expect(state.pitches[1].content?.title).toBe("Owner-edited title");
     expect(regenerated.previousPitchId).toBe(edited.id);
+  });
+  it("does not stack the owner-edit notice when an edited body is edited again", async () => {
+    const { engine } = setup();
+    const first = await engine.draftPitch("owner", {
+      agencyId: "agency",
+      idempotencyKey: "pitch",
+      input: pitchFixture,
+    });
+    const [section, ...rest] = first.content!.sections;
+    const edited = await engine.editPitch("owner", {
+      agencyId: "agency",
+      pitchId: first.id,
+      expectedVersion: first.version,
+      content: {
+        ...first.content!,
+        sections: [{ ...section, body: "Owner draft one." }, ...rest],
+      },
+    });
+    const notice = edited.content!.sections[0].body.replace(
+      "Owner draft one.",
+      "",
+    );
+    expect(notice).toContain("[Evidence needed]");
+    const again = await engine.editPitch("owner", {
+      agencyId: "agency",
+      pitchId: edited.id,
+      expectedVersion: edited.version,
+      content: {
+        ...edited.content!,
+        sections: [
+          {
+            ...edited.content!.sections[0],
+            body: `${edited.content!.sections[0].body} Added line.`,
+          },
+          ...edited.content!.sections.slice(1),
+        ],
+      },
+    });
+    expect(again.content!.sections[0].body).toBe(
+      `${notice}Owner draft one. Added line.`,
+    );
+    const unchanged = await engine.editPitch("owner", {
+      agencyId: "agency",
+      pitchId: again.id,
+      expectedVersion: again.version,
+      content: {
+        ...again.content!,
+        sections: [
+          {
+            ...again.content!.sections[0],
+            body: "Owner draft one. Added line.",
+          },
+          ...again.content!.sections.slice(1),
+        ],
+      },
+    });
+    expect(unchanged.content!.sections[0].body).toBe(
+      `${notice}Owner draft one. Added line.`,
+    );
+    expect(unchanged.content!.sections.slice(1)).toEqual(
+      first.content!.sections.slice(1),
+    );
   });
   it("orders computed gaps D,R,C and retains unfavorable risk flags without scoring", () => {
     const gaps = ["4", "3", "4", "5.6", "4", "3", "3"];

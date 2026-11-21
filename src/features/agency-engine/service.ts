@@ -10,6 +10,9 @@ import {
   pitchDraftSchema,
   pitchInputSchema,
   idSchema,
+  type AgencyDraft,
+  type ArtifactContent,
+  type PitchDraft,
 } from "@/lib/ai/contracts";
 import { containsSolicitation } from "@/lib/ai/pitch";
 import {
@@ -100,6 +103,11 @@ function required<T>(value: T | undefined): T {
       "This record is unavailable.",
     );
   return value;
+}
+const EDIT_NOTICE =
+  "[Evidence needed] Owner-edited narrative; saved references do not independently verify added claims.\n\n";
+function withoutEditNotice(body: string) {
+  return body.startsWith(EDIT_NOTICE) ? body.slice(EDIT_NOTICE.length) : body;
 }
 function expectVersion(value: { version: number }, expected: number) {
   if (value.version !== expected)
@@ -234,39 +242,14 @@ export class AgencyEngine {
       return row;
     });
     if (draft.status !== "generating") return draft;
+    let content: AgencyDraft;
     try {
-      let content = agencyDraftSchema.parse(
+      content = agencyDraftSchema.parse(
         await bounded(
           () => this.provider.generateAgency(draft.input),
           this.timeoutMs,
         ),
       );
-      if (command.previousDraftId) {
-        const previous = required(
-          (await this.repo.read(scope)).drafts.find(
-            (row) => row.id === command.previousDraftId,
-          ),
-        );
-        const old = required(previous.content ?? undefined);
-        const selected = command.regenerateFields!;
-        content = agencyDraftSchema.parse({
-          ...old,
-          ...Object.fromEntries(selected.map((key) => [key, content[key]])),
-          meta: content.meta,
-        });
-      }
-      return await this.repo.transact(scope, (tx) => {
-        const row = required(
-          tx.state.drafts.find((row) => row.id === draft.id),
-        );
-        if (row.status === "generating")
-          Object.assign(row, {
-            content,
-            status: "generated",
-            updatedAt: this.stamp(),
-          });
-        return row;
-      });
     } catch {
       return this.repo.transact(scope, (tx) => {
         const row = required(
@@ -281,6 +264,31 @@ export class AgencyEngine {
         return row;
       });
     }
+    if (command.previousDraftId) {
+      const previous = required(
+        (await this.repo.read(scope)).drafts.find(
+          (row) => row.id === command.previousDraftId,
+        ),
+      );
+      const old = required(previous.content ?? undefined);
+      const selected = command.regenerateFields!;
+      const fresh = content;
+      content = agencyDraftSchema.parse({
+        ...old,
+        ...Object.fromEntries(selected.map((key) => [key, fresh[key]])),
+        meta: fresh.meta,
+      });
+    }
+    return this.repo.transact(scope, (tx) => {
+      const row = required(tx.state.drafts.find((row) => row.id === draft.id));
+      if (row.status === "generating")
+        Object.assign(row, {
+          content,
+          status: "generated",
+          updatedAt: this.stamp(),
+        });
+      return row;
+    });
   }
 
   async editDraft(userId: string, raw: unknown) {
@@ -397,51 +405,14 @@ export class AgencyEngine {
       return row;
     });
     if (run.status !== "running") return run;
+    let content: ArtifactContent;
     try {
-      const content = artifactSchema.parse(
+      content = artifactSchema.parse(
         await bounded(
           () => this.provider.simulateTask(run.input),
           this.timeoutMs,
         ),
       );
-      return await this.repo.transact(scope, async (tx) => {
-        const row = runFor(tx.state, command.agencyId, command.runId);
-        if (row.status !== "running" || row.attempt !== run.attempt) return row;
-        const gate = await tx.task(row.taskId, row.projectId);
-        expectVersion(gate, row.taskVersion);
-        eligible(gate, ["queued", "in_progress"]);
-        const stamp = this.stamp(),
-          previous = tx.state.artifacts.find(
-            (artifact) => artifact.id === row.previousArtifactId,
-          ),
-          id = `${row.id}:artifact`;
-        if (!tx.state.artifacts.some((artifact) => artifact.id === id))
-          tx.state.artifacts.push({
-            id,
-            agencyId: row.agencyId,
-            taskId: row.taskId,
-            runId: row.id,
-            revision: previous ? previous.revision + 1 : 1,
-            previousRevisionId: previous?.id ?? null,
-            status: "draft",
-            content,
-            reviewedByUserId: null,
-            reviewedAt: null,
-            createdAt: stamp,
-          });
-        Object.assign(row, {
-          artifactId: id,
-          status: "awaiting_review",
-          version: row.version + 1,
-          updatedAt: stamp,
-        });
-        const step = row.steps.find(
-          (step) =>
-            step.attempt === row.attempt && step.kind === "generate_draft",
-        )!;
-        Object.assign(step, { status: "completed", completedAt: stamp });
-        return row;
-      });
     } catch {
       return this.repo.transact(scope, (tx) => {
         const row = runFor(tx.state, command.agencyId, command.runId);
@@ -464,6 +435,44 @@ export class AgencyEngine {
         return row;
       });
     }
+    return this.repo.transact(scope, async (tx) => {
+      const row = runFor(tx.state, command.agencyId, command.runId);
+      if (row.status !== "running" || row.attempt !== run.attempt) return row;
+      const gate = await tx.task(row.taskId, row.projectId);
+      expectVersion(gate, row.taskVersion);
+      eligible(gate, ["queued", "in_progress"]);
+      const stamp = this.stamp(),
+        previous = tx.state.artifacts.find(
+          (artifact) => artifact.id === row.previousArtifactId,
+        ),
+        id = `${row.id}:artifact`;
+      if (!tx.state.artifacts.some((artifact) => artifact.id === id))
+        tx.state.artifacts.push({
+          id,
+          agencyId: row.agencyId,
+          taskId: row.taskId,
+          runId: row.id,
+          revision: previous ? previous.revision + 1 : 1,
+          previousRevisionId: previous?.id ?? null,
+          status: "draft",
+          content,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          createdAt: stamp,
+        });
+      Object.assign(row, {
+        artifactId: id,
+        status: "awaiting_review",
+        version: row.version + 1,
+        updatedAt: stamp,
+      });
+      const step = row.steps.find(
+        (step) =>
+          step.attempt === row.attempt && step.kind === "generate_draft",
+      )!;
+      Object.assign(step, { status: "completed", completedAt: stamp });
+      return row;
+    });
   }
 
   private async runMutation(
@@ -673,8 +682,9 @@ export class AgencyEngine {
       return row;
     });
     if (pitch.status !== "generating") return pitch;
+    let content: PitchDraft;
     try {
-      const content = pitchDraftSchema.parse(
+      content = pitchDraftSchema.parse(
         await bounded(
           () => this.provider.draftPitch(pitch.input),
           this.timeoutMs,
@@ -689,18 +699,6 @@ export class AgencyEngine {
         )
       )
         throw new Error("Unknown evidence reference");
-      return await this.repo.transact(scope, (tx) => {
-        const row = required(
-          tx.state.pitches.find((row) => row.id === pitch.id),
-        );
-        if (row.status === "generating")
-          Object.assign(row, {
-            content,
-            status: "generated",
-            updatedAt: this.stamp(),
-          });
-        return row;
-      });
     } catch {
       return this.repo.transact(scope, (tx) => {
         const row = required(
@@ -715,6 +713,16 @@ export class AgencyEngine {
         return row;
       });
     }
+    return this.repo.transact(scope, (tx) => {
+      const row = required(tx.state.pitches.find((row) => row.id === pitch.id));
+      if (row.status === "generating")
+        Object.assign(row, {
+          content,
+          status: "generated",
+          updatedAt: this.stamp(),
+        });
+      return row;
+    });
   }
   editPitch(userId: string, raw: unknown) {
     const command = z
@@ -759,21 +767,22 @@ export class AgencyEngine {
         )
           throw new EngineError("invalid_input", "Unknown evidence reference.");
         const prior = required(row.content ?? undefined);
-        const changed = command.content.sections.filter(
-          (section) =>
-            prior.sections.find((old) => old.key === section.key)?.body !==
-            section.body,
-        );
+        const changed = command.content.sections.filter((section) => {
+          const old = prior.sections.find((old) => old.key === section.key);
+          return (
+            !old ||
+            withoutEditNotice(old.body) !== withoutEditNotice(section.body)
+          );
+        });
         const editedContent = {
           ...command.content,
-          sections: command.content.sections.map((section) =>
-            changed.some((item) => item.key === section.key)
-              ? {
-                  ...section,
-                  body: `[Evidence needed] Owner-edited narrative; saved references do not independently verify added claims.\n\n${section.body}`,
-                }
-              : section,
-          ),
+          sections: command.content.sections.map((section) => ({
+            ...section,
+            body: changed.some((item) => item.key === section.key)
+              ? `${EDIT_NOTICE}${withoutEditNotice(section.body)}`
+              : required(prior.sections.find((old) => old.key === section.key))
+                  .body,
+          })),
           unresolvedClaims: [
             ...new Set([
               ...command.content.unresolvedClaims,

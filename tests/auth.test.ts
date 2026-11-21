@@ -1,12 +1,13 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { createDatabase } from "@/lib/db-client";
 import {
-  authenticateUser,
-  ACCOUNT_AUTH_LIMIT,
+  authenticateUser as authenticateWithTiming,
+  MAX_SIGN_IN_DELAY_MS,
+  SIGNUP_ACCOUNT_LIMIT,
   AUTH_LIMIT,
   AUTH_WINDOW_MS,
   consumeAuthAttempt,
@@ -33,6 +34,14 @@ const credentials = {
   password: "A long test password!",
 };
 const ip = "203.0.113.10";
+// Real database/password checks with injected waits; delay policy is asserted
+// explicitly below without spending wall-clock minutes in the suite.
+const immediateTiming = { now: () => new Date(), sleep: async () => {} };
+const authenticateUser = (
+  db: Parameters<typeof authenticateWithTiming>[0],
+  input: unknown,
+  clientIp: string | null,
+) => authenticateWithTiming(db, input, clientIp, immediateTiming);
 
 beforeAll(() => {
   execFileSync(
@@ -216,10 +225,10 @@ describe("account and session boundary", () => {
     ).resolves.toBeUndefined();
   });
 
-  it("caps failed guesses per account even when the client IP rotates", async () => {
+  it("does not let rotating strangers hard-lock the account after the former 30-attempt ceiling", async () => {
     const target = { ...credentials, email: "ceiling@example.test" };
     await registerUser(db, target, null);
-    for (let count = 2; count < ACCOUNT_AUTH_LIMIT; count++)
+    for (let count = 0; count < 32; count++)
       await expect(
         authenticateUser(
           db,
@@ -230,16 +239,119 @@ describe("account and session boundary", () => {
     await expect(authenticateUser(db, target, null)).resolves.toMatchObject({
       email: target.email,
     });
-    const guess = { ...target, password: "Rotating guess here" };
-    await expect(authenticateUser(db, guess, "10.9.250.1")).rejects.toThrow(
-      "Email or password is incorrect.",
+    await expect(authenticateUser(db, target, null)).resolves.toMatchObject({
+      email: target.email,
+    });
+  });
+
+  it("progressively delays failed guesses, caps waits, preserves the generic response and resets on success", async () => {
+    const target = { ...credentials, email: "backoff@example.test" };
+    await registerUser(db, target, null);
+    const sleep = vi.fn<(milliseconds: number) => Promise<void>>(
+      async () => {},
     );
-    await expect(authenticateUser(db, guess, "10.9.251.1")).rejects.toThrow(
+    const timing = { ...immediateTiming, sleep };
+    for (let count = 0; count < 9; count++)
+      await expect(
+        authenticateWithTiming(
+          db,
+          { ...target, password: "Incorrect password guess" },
+          null,
+          timing,
+        ),
+      ).rejects.toThrow("Email or password is incorrect.");
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([
+      1000, 2000, 4000, 8000, 16000, 30000, 30000, 30000,
+    ]);
+    await expect(
+      authenticateWithTiming(db, target, null, timing),
+    ).resolves.toMatchObject({ email: target.email });
+    expect(sleep).toHaveBeenLastCalledWith(MAX_SIGN_IN_DELAY_MS);
+    sleep.mockClear();
+    await authenticateWithTiming(db, target, null, timing);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("expires failed-attempt delay at the fixed window and treats unknown accounts the same", async () => {
+    const time = new Date("2027-01-01T00:00:00Z");
+    const sleep = vi.fn<(milliseconds: number) => Promise<void>>(
+      async () => {},
+    );
+    const timing = { now: () => time, sleep };
+    const unknown = { ...credentials, email: "backoff-unknown@example.test" };
+    await expect(
+      authenticateWithTiming(db, unknown, null, timing),
+    ).rejects.toThrow("Email or password is incorrect.");
+    await expect(
+      authenticateWithTiming(db, unknown, null, timing),
+    ).rejects.toThrow("Email or password is incorrect.");
+    expect(sleep).toHaveBeenCalledWith(1000);
+    sleep.mockClear();
+    time.setTime(time.getTime() + AUTH_WINDOW_MS);
+    await expect(
+      authenticateWithTiming(db, unknown, null, timing),
+    ).rejects.toThrow("Email or password is incorrect.");
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("waits before password lookup but continuing attacks cannot extend an admitted owner's delay", async () => {
+    const target = { ...credentials, email: "owner-delay@example.test" };
+    await registerUser(db, target, null);
+    await expect(
+      authenticateUser(
+        db,
+        { ...target, password: "Initial wrong password" },
+        null,
+      ),
+    ).rejects.toThrow();
+    let release!: () => void;
+    let entered!: () => void;
+    const waiting = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const lookup = vi.spyOn(db.user, "findUnique");
+    const sleep = vi.fn<(milliseconds: number) => Promise<void>>(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+          entered();
+        }),
+    );
+    const pending = authenticateWithTiming(db, target, null, {
+      ...immediateTiming,
+      sleep,
+    });
+    await waiting;
+    expect(lookup).not.toHaveBeenCalled();
+    lookup.mockRestore();
+    await expect(
+      authenticateUser(
+        db,
+        { ...target, password: "Another stranger guess" },
+        null,
+      ),
+    ).rejects.toThrow();
+    release();
+    await expect(pending).resolves.toMatchObject({ email: target.email });
+    expect(sleep).toHaveBeenCalledExactlyOnceWith(1000);
+  });
+
+  it("keeps registration quotas separate so blocked sign-ups cannot lock out sign-in", async () => {
+    const target = {
+      ...credentials,
+      email: "registration-ceiling@example.test",
+    };
+    await registerUser(db, target, null);
+    await db.authThrottle.update({
+      where: { key: hashToken(`signup:v1:${target.email}`) },
+      data: { attempts: SIGNUP_ACCOUNT_LIMIT },
+    });
+    await expect(registerUser(db, target, null)).rejects.toThrow(
       "Too many attempts",
     );
-    await expect(authenticateUser(db, target, null)).rejects.toThrow(
-      "Too many attempts",
-    );
+    await expect(authenticateUser(db, target, null)).resolves.toMatchObject({
+      email: target.email,
+    });
   });
 
   it("counts successful sign-ups toward the per-IP limit", async () => {

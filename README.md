@@ -37,7 +37,7 @@ See [local operation and recovery](docs/OPERATIONS.md) for Docker volumes, produ
 | `npm run lint`                                           | ESLint and Next.js rules                                                        |
 | `npm run typecheck`                                      | Generate route types and check strict TypeScript                                |
 | `npm test`                                               | Vitest behavior tests, including an isolated SQLite auth database               |
-| `npm run test:e2e`                                       | Playwright sign-up → dashboard → sign-out → sign-in smoke test                  |
+| `npm run test:e2e`                                       | Playwright auth round-trip and browser security checks                  |
 | `npm run format:check` / `npm run format`                | Check / apply Prettier                                                          |
 | `npm run db:migrate -- --name description`               | Create and apply a local schema migration                                       |
 | `npm run db:deploy`                                      | Apply committed migrations                                                      |

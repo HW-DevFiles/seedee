@@ -104,6 +104,20 @@ test("multidisciplinary creative prepares evidence, scenarios, pitch and export"
     row(page, "Score components", "M_model").locator("td").nth(1),
   ).toHaveText("0 / 3");
   await expect(page.getByText("Risk and evidence limits")).toBeVisible();
+  // No form records delivery hours, so founder share is unknown: it earns
+  // nothing and is not shown as a passed check (Blair's C3 follow-up).
+  expect(
+    (
+      await row(page, "Score components", "H_founder")
+        .locator("td")
+        .allInnerTexts()
+    ).slice(0, 3),
+  ).toEqual(["Unknown", "0 / 2", "missing_or_invalid_evidence"]);
+  await expect(
+    page.locator("aside", { hasText: "Risk and evidence limits" }),
+  ).toContainText(
+    "Founder delivery workload and replacement cost not entered; founder dependence is unknown.",
+  );
 
   // Scenarios are hypothetical and never move readiness actuals.
   await page.goto("/app/investor-readiness/financials");

@@ -127,6 +127,8 @@ test("sample readiness reproduces the frozen 73.4 fixture and keeps risks visibl
   await expect(risk).toContainText(
     "Largest unearned components: D (5.6 points), R (4 points), C (4 points).",
   );
+  // The sample records founder hours, so no missing-workload notice.
+  await expect(risk).not.toContainText("Founder delivery workload");
   await expect(page.getByLabel("Educational planning boundary")).toHaveText(
     BOUNDARY,
   );

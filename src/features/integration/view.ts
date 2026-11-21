@@ -585,6 +585,12 @@ export function connectedScreen(
           output.gaps.length
             ? `Largest unearned components: ${output.gaps.map((g) => `${g.key} (${g.unearned} points)`).join(", ")}.`
             : "",
+          // Founder dependence stays visible when its inputs are missing.
+          output.components.some(
+            (c) => c.key === "H_founder" && c.rawValue === null,
+          )
+            ? "Founder delivery workload and replacement cost not entered; founder dependence is unknown."
+            : "",
         ]
           .filter(Boolean)
           .join(" "),

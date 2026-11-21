@@ -24,13 +24,15 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node --import tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:seed:domain": "node --import tsx prisma/seed-domain-cli.ts"
   },
   "dependencies": {
-    "@prisma/client": "7.10.1",
     "@prisma/adapter-better-sqlite3": "7.10.1",
+    "@prisma/client": "7.10.1",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
+    "decimal.js": "^10.6.0",
     "next": "16.4.6",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

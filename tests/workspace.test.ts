@@ -698,6 +698,58 @@ describe("persistent owner workspace", () => {
     });
     expect((await finance.download(created.id)).markdown).toBe(text);
   });
+  it("records owner review in the manifest and rejects unreviewed bridged pitches", async () => {
+    const snapshot = await db.financeSnapshot.findFirstOrThrow({
+      where: { agencyId, kind: "forecast" },
+    });
+    const pitch = {
+      id: "bridged-pitch",
+      version: 2,
+      content: "Bridged pitch",
+      origin: "assumption" as const,
+      sourceIds: [snapshot.id],
+      templateVersion: "pitch-template-test",
+    };
+    const input = {
+      snapshotIds: [snapshot.id],
+      evidenceIds: [],
+      pitchId: pitch.id,
+      actualOrigin: "user_entered",
+      confirmReviewed: true,
+    };
+    await expect(
+      createFinanceService(db, owner, clock, {
+        loadPitch: async () => ({ ...pitch, reviewed: false }),
+      }).command({
+        type: "export.create",
+        input: { ...input, idempotencyKey: "unreviewed-pitch" },
+      }),
+    ).rejects.toMatchObject({ code: "conflict" });
+    const created = z.object({ id: z.string() }).parse(
+      await createFinanceService(db, owner, clock, {
+        loadPitch: async () => ({ ...pitch, reviewed: true }),
+      }).command({
+        type: "export.create",
+        input: { ...input, idempotencyKey: "reviewed-pitch" },
+      }),
+    );
+    expect((await finance.download(created.id)).manifest).toMatchObject({
+      confirmReviewed: true,
+      pitchId: pitch.id,
+      pitchVersion: 2,
+    });
+    await expect(
+      finance.command({
+        type: "export.create",
+        input: {
+          ...input,
+          pitchId: null,
+          idempotencyKey: "unconfirmed",
+          confirmReviewed: false,
+        },
+      }),
+    ).rejects.toThrow();
+  });
   it("rejects combined sample/real exports and forged snapshot references", async () => {
     const sample = z.object({ id: z.string() }).parse(
       await finance.command({
@@ -853,6 +905,69 @@ describe("persistent owner workspace", () => {
         ).data,
       ).recognizedRevenueMinor,
     ).toBe(120000);
+  });
+  it("deletes an unreferenced draft offer after saving actuals but keeps snapshot-referenced offers", async () => {
+    const offer = {
+      title: "Draft offer",
+      deliverables: ["Draft"],
+      exclusions: [],
+      revisionLimit: 0,
+      turnaroundDays: 1,
+      laborHours: 0,
+      priceMinor: 0,
+      currency: "USD",
+      freeSample: true,
+      draft: true,
+      pricingBasis: {
+        kind: "illustrative_assumption",
+        laborRateMinor: 0,
+        directCostMinor: 0,
+        targetMarginBps: 0,
+        note: "Explicit free sample",
+      },
+    };
+    expect(
+      await db.financeSnapshot.count({
+        where: { agencyId, kind: "actual_revision" },
+      }),
+    ).toBeGreaterThan(0);
+    const unreferenced = record(
+      await workspace.command({ type: "package.create", input: offer }),
+    );
+    await workspace.command({
+      type: "package.delete",
+      input: { id: unreferenced.id, expectedVersion: 1 },
+    });
+    expect(
+      await db.servicePackage.findUnique({ where: { id: unreferenced.id } }),
+    ).toBeNull();
+    const referenced = record(
+      await workspace.command({ type: "package.create", input: offer }),
+    );
+    await finance.command({
+      type: "finance.readiness",
+      input: {
+        input: {
+          ...emptyReadiness("2026-10-31T00:00:00Z"),
+          packages: [
+            {
+              id: referenced.id,
+              fixedScope: "Draft scope",
+              priceCostBasis: "Draft basis",
+              sopVersion: "sop-1",
+              sopCreatedAt: "2026-10-01T00:00:00Z",
+              checklist: ["Check"],
+            },
+          ],
+        },
+      },
+    });
+    await expect(
+      workspace.command({
+        type: "package.delete",
+        input: { id: referenced.id, expectedVersion: 1 },
+      }),
+    ).rejects.toMatchObject({ code: "conflict" });
   });
   it("retains data across disconnect/reconnect and blocks resetting real workspaces", async () => {
     const connection = createDatabase(url);

@@ -381,15 +381,8 @@ export function createFinanceService(
                 "An export source is unavailable.",
               );
             const pitch = v.pitchId
-              ? bridge
-                ? await bridge.loadPitch(tx, userId, agencyId, v.pitchId)
-                : null
+              ? await bridge.loadPitch(tx, userId, agencyId, v.pitchId)
               : null;
-            if (v.pitchId && !pitch)
-              throw new DomainError(
-                "conflict",
-                "Pitch export adapter is not connected. Save a reviewed pitch before exporting it.",
-              );
             if (pitch && !pitch.reviewed)
               throw new DomainError(
                 "conflict",
@@ -431,6 +424,7 @@ export function createFinanceService(
                 pitchId: v.pitchId,
                 pitchVersion: pitch?.version ?? null,
                 actualOrigin: v.actualOrigin,
+                confirmReviewed: v.confirmReviewed,
                 sample,
                 versions: {
                   readiness: READINESS_VERSION,

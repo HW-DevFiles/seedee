@@ -18,9 +18,8 @@ import {
   readinessSchema,
 } from "../src/features/finance/contracts";
 import { buildFacts } from "../src/features/finance/facts";
-const fixtureUserId = "seedee-demo-user-v1",
-  fixtureAgencyId = "seedee-demo-agency-v1";
-// Called only by explicit local seed tooling after Vera's reserved identity seed.
+import { demoAgencyId, demoEmail, demoUserId } from "./demo-identity";
+// Called only by explicit local seed tooling after the reserved identity seed.
 // No public action accepts IDs or sets the sample marker.
 export async function initializeSyntheticWorkspace(
   db: PrismaClient,
@@ -32,11 +31,11 @@ export async function initializeSyntheticWorkspace(
       "Synthetic domain seeding is disabled in production.",
     );
   return db.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: fixtureUserId } }),
-      agency = await tx.agency.findUnique({ where: { id: fixtureAgencyId } });
+    const user = await tx.user.findUnique({ where: { id: demoUserId } }),
+      agency = await tx.agency.findUnique({ where: { id: demoAgencyId } });
     if (
       !user ||
-      user.email !== "demo@seedee.local" ||
+      user.email !== demoEmail ||
       !agency ||
       agency.ownerId !== user.id
     )

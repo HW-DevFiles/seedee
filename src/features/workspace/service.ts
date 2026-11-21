@@ -215,6 +215,15 @@ async function automationOwns(
       );
   }
 }
+function mentions(value: unknown, id: string): boolean {
+  return value === id
+    ? true
+    : Array.isArray(value)
+      ? value.some((v) => mentions(v, id))
+      : value && typeof value === "object"
+        ? Object.values(value).some((v) => mentions(v, id))
+        : false;
+}
 async function preserveActualRevision(
   tx: Transaction,
   row: {
@@ -739,7 +748,12 @@ export function createWorkspaceService(
             if (
               !row.draft ||
               (await tx.project.count({ where: { packageId: row.id } })) ||
-              (await tx.financeSnapshot.count({ where: { agencyId } })) ||
+              (
+                await tx.financeSnapshot.findMany({
+                  where: { agencyId },
+                  select: { input: true },
+                })
+              ).some((s) => mentions(s.input, row.id)) ||
               (await tx.evidenceItem.count({
                 where: { agencyId, sourceRecordId: row.id },
               }))

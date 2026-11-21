@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { requireSecurityContext } from "@/lib/security/request";
 import { createWorkspaceService } from "../workspace/service";
 import { createIntegratedServices } from "./services";
-export async function readIntegratedWorkspace() {
+// `now` is the request's read time; views derive date-validity labels from it.
+export async function readIntegratedWorkspace(now = new Date()) {
   const context = await requireSecurityContext();
   const user = await db.user.findUniqueOrThrow({
     where: { id: context.userId },
@@ -24,7 +25,14 @@ export async function readIntegratedWorkspace() {
         workspace.agency.id,
       )
     : null;
-  return { context, userName: user.name, workspace, engine, automation };
+  return {
+    context,
+    userName: user.name,
+    workspace,
+    engine,
+    automation,
+    readAt: now.toISOString(),
+  };
 }
 export type IntegratedRead = Awaited<
   ReturnType<typeof readIntegratedWorkspace>

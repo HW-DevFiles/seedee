@@ -27,7 +27,7 @@ test("seeded sample sign-in loads saved workspace and finance with sample labels
     page.getByRole("textbox", { name: "Agency name", exact: true }),
   ).toHaveValue(demoFixture.agencyName);
   await page.goto("/app/investor-readiness");
-  await expect(page.getByText("73.4", { exact: true })).toBeVisible();
+  await expect(page.getByText("73.4 / 100", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Score components" }),
   ).toBeVisible();

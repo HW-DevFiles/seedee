@@ -33,7 +33,7 @@ import {
   HYPOTHETICAL,
   SAMPLE_BANNER,
 } from "./contracts";
-import { scoreReadiness } from "./readiness";
+import { readinessFreshness, scoreReadiness } from "./readiness";
 import { forecast, financialCsv } from "./forecast";
 import { calculateEquity } from "./equity";
 import { buildFacts } from "./facts";
@@ -469,7 +469,7 @@ export function createFinanceService(
               ),
               ...snapshots.map(
                 (s) =>
-                  `## ${s.kind} · ${s.formulaVersion}\n\nAs of ${s.asOf.toISOString()} · evaluated ${s.evaluatedAt.toISOString()} · ${provenanceSchema.parse(s.provenance).origin} · source ${s.id}\n\n${markdownText(JSON.stringify(s.output, null, 2))}\n\nInputs and assumptions\n\n${markdownText(JSON.stringify(s.input, null, 2))}`,
+                  `## ${s.kind} · ${s.formulaVersion}\n\nAs of ${s.asOf.toISOString()} · evaluated ${s.evaluatedAt.toISOString()} · ${provenanceSchema.parse(s.provenance).origin} · source ${s.id}${s.kind === "readiness" ? freshnessLine(s.input, s.output, generatedAt) : ""}\n\n${markdownText(JSON.stringify(s.output, null, 2))}\n\nInputs and assumptions\n\n${markdownText(JSON.stringify(s.input, null, 2))}`,
               ),
               "## Evidence and source register",
               ...evidence.map(
@@ -585,6 +585,16 @@ function actualCsv(rows: z.infer<typeof actualSchema>[]) {
 function csvText(value: string) {
   const safe = /^[\s]*[=+@-]/.test(value) ? "'" + value : value;
   return '"' + safe.replaceAll('"', '""') + '"';
+}
+// C4: a new pack states the snapshot's freshness at generation time; the
+// saved calculation (including its stored stage) is reproduced unchanged.
+function freshnessLine(input: unknown, output: unknown, generatedAt: string) {
+  const f = readinessFreshness(
+    input,
+    output as Parameters<typeof readinessFreshness>[1],
+    generatedAt,
+  );
+  return `\n\nFreshness at export ${generatedAt}: ${markdownText(f.stage)} · ${f.ageDays} days after as-of${f.reasons.length ? ` · ${f.reasons.join(", ")}` : ""}`;
 }
 function withCsvProvenance(
   table: string,

@@ -10,7 +10,7 @@ import { displayMinor } from "../product-ui/form-input";
 import { factSchema, roleSchema } from "@/lib/ai/contracts";
 import { z } from "zod";
 import { actualSchema, provenanceSchema } from "../workspace/contracts";
-import { scoreReadiness } from "../finance/readiness";
+import { readinessFreshness, scoreReadiness } from "../finance/readiness";
 import { D, money } from "../finance/decimal";
 import { calculateEquity } from "../finance/equity";
 import { forecast } from "../finance/forecast";
@@ -37,6 +37,14 @@ const moneyInput = (n: unknown) =>
   typeof n === "number"
     ? `${n < 0 ? "-" : ""}${Math.floor(Math.abs(n) / 100)}.${String(Math.abs(n) % 100).padStart(2, "0")}`
     : "";
+// Display-only rounding of saved component inputs; stored Decimal strings,
+// exports and CSV keep full precision.
+const displayInput = (value: string | null, unit: string) =>
+  value === null
+    ? "Unknown"
+    : unit === "fraction" && /^-?\d+(\.\d+)?$/.test(value)
+      ? `${D(value).times(100).toDecimalPlaces(1).toFixed(1)}%`
+      : value;
 export function pitchFacts(data: IntegratedRead) {
   return data.workspace.snapshots
     .filter((s) => ["readiness", "forecast"].includes(s.kind))
@@ -344,6 +352,38 @@ export function connectedScreen(
         body: `Demo provider. ${run!.input.brief}`,
       },
     ];
+    // A revision cancels this run and queues a linked successor; show that
+    // relationship from owned persisted runs rather than a bare "cancelled".
+    const successor = e.runs.find(
+      (r) => r.previousRunId === run!.id && r.taskId === run!.taskId,
+    );
+    const predecessor = e.runs.find(
+      (r) => r.id === run!.previousRunId && r.taskId === run!.taskId,
+    );
+    if (successor)
+      screen.notices.push({
+        title: "Superseded by requested revision",
+        body: "This version was replaced at the owner's request. Review and approve the revised run instead.",
+      });
+    screen.links = [
+      ...(screen.links ?? []),
+      ...(successor
+        ? [
+            {
+              label: `Open requested revision · ${successor.status} · v${successor.version}`,
+              href: `/app/crew/runs/${successor.id}`,
+            },
+          ]
+        : []),
+      ...(predecessor
+        ? [
+            {
+              label: "Open previous version",
+              href: `/app/crew/runs/${predecessor.id}`,
+            },
+          ]
+        : []),
+    ];
     screen.forms?.unshift(form("run.advance", "Run or resume simulation"));
   }
   if (key === "draft" && draft?.content) {
@@ -492,21 +532,28 @@ export function connectedScreen(
     const output = readiness.output as unknown as ReturnType<
       typeof scoreReadiness
     >;
+    // C4: only the date-validity label ages; the saved result is unchanged.
+    const fresh = readinessFreshness(readiness.input, output, data.readAt);
     screen.metrics = [
       {
         label: "Preparation score",
-        value: text(output.score),
+        value: `${text(output.score)} / 100`,
         detail: readiness.formulaVersion,
       },
       {
         label: "Evidence coverage",
-        value: text(output.coveragePercent),
-        detail: "Availability, not verification",
+        value: `${text(output.coveragePercent)}%`,
+        detail: "Populated evidence, not verification",
       },
       {
         label: "As of",
         value: date(readiness.asOf),
         detail: "Immutable saved calculation",
+      },
+      {
+        label: "Preparation stage",
+        value: fresh.stage,
+        detail: `Calculated ${date(readiness.evaluatedAt)} · freshness assessed ${date(fresh.assessedAt)}, ${fresh.ageDays} days after as-of`,
       },
     ];
     screen.tables = [
@@ -517,19 +564,32 @@ export function connectedScreen(
           id: c.key,
           cells: [
             c.key,
-            c.rawValue ?? "Unknown",
+            displayInput(c.rawValue, c.unit),
             `${c.points} / ${c.maxPoints}`,
             c.reasonCode,
           ],
         })),
       ),
     ];
-    screen.notices?.push({
-      title: "Risk and evidence limits",
-      body:
-        output.riskFlags.join("; ") ||
-        "Review the missing evidence before relying on this snapshot.",
-    });
+    // The readiness catalog screen has no notices, so create the list rather
+    // than silently dropping risk flags (a high score never hides them).
+    screen.notices = [
+      ...(screen.notices ?? []),
+      {
+        title: "Risk and evidence limits",
+        kind: "warning",
+        body: [
+          output.riskFlags.length
+            ? `Risk flags: ${output.riskFlags.map((f) => f.replaceAll("_", " ")).join("; ")}.`
+            : "Review the missing evidence before relying on this snapshot.",
+          output.gaps.length
+            ? `Largest unearned components: ${output.gaps.map((g) => `${g.key} (${g.unearned} points)`).join(", ")}.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      },
+    ];
   }
   const forecasts = w.snapshots.filter(
     (s) => s.kind === "forecast" && s.formulaVersion === "agency-finance-v1.1",
@@ -564,10 +624,16 @@ export function connectedScreen(
             s.formulaVersion,
             provenanceSchema.parse(s.provenance).origin,
           ],
+          href: `/app/investor-readiness/financials?scenario=${s.id}`,
+          linkLabel: "Show monthly projection",
         })),
       ),
     ];
-    for (const s of forecasts.slice(0, 4)) {
+    // Every saved scenario keeps its summary card; one owned, selected
+    // scenario (newest by default) renders its 24-month table.
+    const selected =
+      forecasts.find((s) => s.id === query?.scenario) ?? forecasts[0];
+    for (const s of forecasts) {
       const output = s.output as unknown as ReturnType<typeof forecast>;
       screen.cards!.push({
         id: s.id,
@@ -601,7 +667,7 @@ export function connectedScreen(
               ]
             : [],
       });
-      if (output.status === "complete")
+      if (output.status === "complete" && s.id === selected?.id)
         screen.tables.push(
           table(
             `Monthly projection · ${text((s.input as { name?: string }).name ?? "Saved scenario")}`,
@@ -690,8 +756,10 @@ export function connectedScreen(
       });
       if (v.supported)
         screen.tables.push(
+          // Same-day scenarios need distinct titles: the title is both the
+          // React key and the table's accessible name.
           table(
-            `Ownership · ${date(row.createdAt)}`,
+            `Ownership · ${date(row.createdAt)} · ${row.id.slice(-6)}`,
             ["Holder", "Shares", "Percent"],
             v.ownership.map((h) => ({
               id: h.id,
@@ -706,7 +774,18 @@ export function connectedScreen(
     }
   }
   if (key === "settings")
-    screen.forms = screen.forms?.filter((f) => f.id !== "settings.update");
+    screen.forms = screen.forms
+      ?.filter((f) => f.id !== "settings.update")
+      .filter((f) => f.id !== "workspace.reset" || w.agency?.sampleWorkspace)
+      .map((f) =>
+        f.id === "workspace.reset" && process.env.NODE_ENV === "production"
+          ? {
+              ...f,
+              unavailableReason:
+                "Sample reset is available only in a local demo environment.",
+            }
+          : f,
+      );
   screen.forms = screen.forms?.map((f) => {
     if (f.id === "actual.save")
       f.recordVersions = Object.fromEntries(
@@ -932,9 +1011,17 @@ export function connectedScreen(
         field("pitchId", "Pitch version", {
           type: "select",
           required: false,
+          // Mirror export.create: a version with a generated successor is
+          // superseded and cannot be exported.
           options: options(
             e.pitches
-              .filter((p) => p.content)
+              .filter(
+                (p) =>
+                  p.content &&
+                  !e.pitches.some(
+                    (n) => n.previousPitchId === p.id && n.content,
+                  ),
+              )
               .map((p) => ({
                 id: p.id,
                 title: `${p.content!.title} · v${p.version}`,

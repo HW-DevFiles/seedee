@@ -24,7 +24,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node --import tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:seed:domain": "node --import tsx prisma/seed-domain-cli.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "7.10.1",

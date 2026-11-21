@@ -163,9 +163,9 @@ model Project {
   agencyId String
   agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   clientId String?
-  client Client? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: NoAction)
   packageId String?
-  package ServicePackage? @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  package ServicePackage? @relation(fields: [packageId], references: [id], onDelete: NoAction)
   title String
   brief String @default("")
   status String @default("planned")
@@ -185,7 +185,7 @@ model Task {
   agencyId String
   agency Agency @relation(fields: [agencyId], references: [id], onDelete: Cascade)
   projectId String?
-  project Project? @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: NoAction)
   title String
   input String @default("")
   assignedRoleKey String?
@@ -209,7 +209,7 @@ model TaskDependency {
   taskId String
   predecessorId String
   task Task @relation("dependent", fields: [taskId], references: [id], onDelete: Cascade)
-  predecessor Task @relation("predecessor", fields: [predecessorId], references: [id], onDelete: Restrict)
+  predecessor Task @relation("predecessor", fields: [predecessorId], references: [id], onDelete: NoAction)
   @@id([taskId, predecessorId])
 }
 model ProjectCloseout {

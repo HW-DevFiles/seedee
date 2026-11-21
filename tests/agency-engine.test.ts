@@ -524,6 +524,34 @@ describe("private narrative and explanation evaluations", () => {
 });
 
 describe("authenticated boundary", () => {
+  it("reauthorizes saved-result replays without charging quota or invoking the provider", async () => {
+    const provider = new DemoProvider(),
+      generate = vi.spyOn(provider, "generateAgency"),
+      { engine } = setup(provider);
+    const context = vi.fn(async () => ({ userId: "owner" })),
+      quota = vi.fn(async () => {});
+    const actions = createEngineActions(engine, {
+      requireContext: context,
+      consumeGenerationLimit: quota,
+    });
+    const command = {
+      type: "generateAgency",
+      input: { idempotencyKey: "saved-replay", input: agencyFixture },
+    };
+    const first = await actions.command(command);
+    expect(first).toMatchObject({ ok: true, data: { status: "generated" } });
+    expect(await actions.command(command)).toEqual(first);
+    expect(context).toHaveBeenCalledTimes(2);
+    expect(quota).toHaveBeenCalledTimes(1);
+    expect(generate).toHaveBeenCalledTimes(1);
+    const exhausted = createEngineActions(engine, {
+      requireContext: context,
+      consumeGenerationLimit: async () => {
+        throw new EngineError("rate_limited", "Quota exhausted");
+      },
+    });
+    expect(await exhausted.command(command)).toEqual(first);
+  });
   it("requires session/origin and quotas, and rejects submitted owner identity", async () => {
     const { engine } = setup(),
       context = vi.fn(async () => ({ userId: "owner" })),

@@ -33,6 +33,8 @@ Versions are `agency-engine-v1.0`, `creative-templates-v1.0` and `private-pitch-
 
 Results use `{ok:true,data}` or `{ok:false,error:{code,message,current?}}`. Codes are unauthenticated, forbidden_or_missing, invalid_input, conflict, rate_limited and provider_failed. Show conflicts with refreshed versions while preserving form input. Retry an uncertain response with the same key and same input; a changed payload under the same key is rejected. Generation failures save the normalized input and a safe error code. Start a new generation request to retry a failed agency/pitch draft. An interrupted `generating` request can resume with its original key.
 
+Quota applies before new provider computation: fresh/resumed agency or pitch generation and queued/running run advancement. Persisted terminal results reauthorize and replay without charging or recomputing. Queue, retry, revision, cancellation and approval only mutate saved state; their later provider advancement consumes quota.
+
 Generation and editing never create an active Agency. Kuba owns the atomic acceptance transaction and unique owner constraint. Acceptance should copy validated draft content into operational records; later regeneration creates a separate draft and cannot overwrite those records. Individual draft edits require the saved version. Selective regeneration preserves all unselected user edits and the previous saved draft.
 
 ## Persistence and transaction binding

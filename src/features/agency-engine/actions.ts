@@ -51,18 +51,32 @@ export function createEngineActions(
           .object({ agencyId: idSchema.optional() })
           .parse(command.input);
         // Authorize before quota or computation; no browser-supplied owner is forwarded.
-        await engine.readWorkspace(context.userId, scope.agencyId);
+        const state = await engine.readWorkspace(
+          context.userId,
+          scope.agencyId,
+        );
+        let providerWork = false;
         if (
-          [
-            "generateAgency",
-            "queueRun",
-            "advanceRun",
-            "retryRun",
-            "requestRevision",
-            "draftPitch",
-          ].includes(command.type)
-        )
-          await boundary.consumeGenerationLimit(context);
+          command.type === "generateAgency" ||
+          command.type === "draftPitch"
+        ) {
+          const { idempotencyKey } = z
+            .object({ idempotencyKey: idSchema })
+            .parse(command.input);
+          const record = (
+            command.type === "generateAgency" ? state.drafts : state.pitches
+          ).find((row) => row.idempotencyKey === idempotencyKey);
+          providerWork = !record || record.status === "generating";
+        } else if (command.type === "advanceRun") {
+          const { runId } = z.object({ runId: idSchema }).parse(command.input);
+          const run = state.runs.find(
+            (row) => row.id === runId && row.agencyId === scope.agencyId,
+          );
+          providerWork = Boolean(
+            run && ["queued", "running"].includes(run.status),
+          );
+        }
+        if (providerWork) await boundary.consumeGenerationLimit(context);
         return engine[command.type](context.userId, command.input);
       });
     },

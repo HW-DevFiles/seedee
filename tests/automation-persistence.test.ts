@@ -157,4 +157,23 @@ describe("transactional automation repository", () => {
     });
     await db.$executeRaw`UPDATE "AutomationState" SET "stateJson" = ${JSON.stringify(before.state)}, "version" = ${before.state.version} WHERE "agencyId" = 'agency'`;
   });
+  it("commits nothing for a no-op run_due_routines after a schema-parsed load", async () => {
+    const routines = async (key: string) =>
+      service.command("owner", {
+        agencyId: "agency",
+        expectedVersion: (await service.readWorkspace("owner", "agency")).state
+          .version,
+        idempotencyKey: key,
+        command: { type: "run_due_routines" },
+      });
+    expect(await routines("routines-first")).toMatchObject({ ok: true });
+    const stored = async () =>
+      db.$queryRaw<{ version: number; stateJson: string }[]>`SELECT "version", "stateJson" FROM "AutomationState" WHERE "agencyId" = 'agency'`;
+    const before = await stored();
+    expect(await routines("routines-noop")).toMatchObject({
+      ok: true,
+      replayed: false,
+    });
+    expect(await stored()).toEqual(before);
+  });
 });

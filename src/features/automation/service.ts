@@ -16,6 +16,7 @@ import {
 } from "./engine";
 import { checkedInstant, type Clock } from "./clock";
 import { assertAutomationIntegrity, reconcileOwned } from "./integrity";
+import { automationStateSchema } from "./state-schema";
 
 export type AutomationTransaction = {
   // Must load all foreign references only for the session-derived owner, and
@@ -145,7 +146,9 @@ export function createAutomationService(
         assertAutomationIntegrity(state, context);
         if (
           request.command.type === "run_due_routines" &&
-          JSON.stringify(state) === JSON.stringify(saved)
+          // Normalise key order: persisted state is schema-parsed on load.
+          JSON.stringify(automationStateSchema.parse(state)) ===
+            JSON.stringify(saved && automationStateSchema.parse(saved))
         )
           return {
             ok: true,

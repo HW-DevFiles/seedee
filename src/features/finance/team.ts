@@ -51,7 +51,11 @@ type Evidence = {
   provenance: unknown;
   createdAt: Date;
 };
-export function teamRecords(rows: Evidence[], origin: Provenance["origin"]) {
+export function teamRecords(
+  rows: Evidence[],
+  origin: Provenance["origin"],
+  asOf?: string,
+) {
   const seen = new Set<string>();
   return [...rows]
     .sort(
@@ -64,7 +68,11 @@ export function teamRecords(rows: Evidence[], origin: Provenance["origin"]) {
       const parsed = teamEvidenceSchema.safeParse(
         (row.value as { content?: unknown })?.content,
       );
-      if (!parsed.success || parsed.data.provenance.origin !== origin)
+      if (
+        !parsed.success ||
+        parsed.data.provenance.origin !== origin ||
+        (asOf && new Date(parsed.data.provenance.asOf) > new Date(asOf))
+      )
         return [];
       const key = `${parsed.data.record.kind}:${parsed.data.entryId}`;
       if (seen.has(key)) return [];
@@ -74,14 +82,7 @@ export function teamRecords(rows: Evidence[], origin: Provenance["origin"]) {
 }
 export function applyTeamEvidence(input: ReadinessInput, rows: Evidence[]) {
   const result = structuredClone(input);
-  const records = teamRecords(
-    rows.filter(
-      (r) =>
-        new Date(provenanceSchema.parse(r.provenance).asOf) <=
-        new Date(input.asOf),
-    ),
-    input.provenance.origin,
-  ).filter((r) => new Date(r.provenance.asOf) <= new Date(input.asOf));
+  const records = teamRecords(rows, input.provenance.origin, input.asOf);
   for (const kind of [
     "human",
     "backup",

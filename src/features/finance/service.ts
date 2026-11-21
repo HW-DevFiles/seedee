@@ -34,7 +34,11 @@ import {
   SAMPLE_BANNER,
 } from "./contracts";
 import { scoreReadiness } from "./readiness";
-import { milestoneSchema, previewMilestone } from "./milestone";
+import {
+  milestoneSchema,
+  previewMilestone,
+  readinessBaseline,
+} from "./milestone";
 import {
   teamCommandSchema,
   validateTeamReferences,
@@ -176,17 +180,13 @@ export function createFinanceService(
             const serviceIds = new Set([
               ...services.map((s) => s.id),
               ...saved.flatMap((s) => {
-                const parsed = readinessSchema.safeParse(
-                  (() => {
-                    const value = { ...(s.input as Record<string, unknown>) };
-                    delete value.actualVersions;
-                    delete value.evidenceVersions;
-                    return value;
-                  })(),
-                );
-                return parsed.success
-                  ? (parsed.data.recognition ?? []).map((l) => l.serviceId)
-                  : [];
+                try {
+                  return (readinessBaseline(s.input).recognition ?? []).map(
+                    (l) => l.serviceId,
+                  );
+                } catch {
+                  return [];
+                }
               }),
             ]);
             const referencedServices =

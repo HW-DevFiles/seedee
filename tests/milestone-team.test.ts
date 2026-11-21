@@ -347,3 +347,49 @@ it("requires an explicit founder log before showing a zero founder share", () =>
   });
   expect(r.riskFlags).not.toContain("founder_unpaid_labor");
 });
+
+it("keeps the in-window team record when a later correction postdates the snapshot", () => {
+  const record = (compensationMinor: number, asOf: string, at: string) => ({
+    id: `row-${compensationMinor}`,
+    version: 1,
+    metricKey: "readiness_team",
+    provenance: { ...provenance, asOf },
+    createdAt: new Date(at),
+    value: {
+      content: {
+        entryId: "founder",
+        provenance: { ...provenance, asOf },
+        record: {
+          kind: "human",
+          data: {
+            id: "founder",
+            role: "Delivery",
+            simulated: false,
+            isFounder: true,
+            compensationMinor,
+            agreementStart: "2026-05-01T00:00:00Z",
+            agreementEnd: null,
+          },
+        },
+      },
+    },
+  });
+  const later = new Date(Date.parse(provenance.asOf) + 86400000).toISOString();
+  const mapped = applyTeamEvidence(emptyReadiness(provenance.asOf), [
+    record(100000, provenance.asOf, "2026-10-01T00:00:00Z"),
+    record(200000, later, "2026-11-01T00:00:00Z"),
+    {
+      id: "unrelated",
+      version: 1,
+      metricKey: "other",
+      provenance: "malformed",
+      createdAt: new Date("2026-11-02T00:00:00Z"),
+      value: {},
+    },
+  ]);
+  expect(mapped.humans).toHaveLength(1);
+  expect(mapped.humans![0]).toMatchObject({
+    compensationMinor: 100000,
+    sourceIds: ["row-100000"],
+  });
+});

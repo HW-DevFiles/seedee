@@ -13,9 +13,9 @@ import {
   actualSchema,
   type Provenance,
 } from "../workspace/contracts";
-import { applyTeamEvidence } from "../finance/team";
+import { readinessBaseline } from "../finance/milestone";
 import { emptyReadiness } from "../finance/readiness";
-import { readinessSchema, forecastSchema } from "../finance/contracts";
+import { forecastSchema } from "../finance/contracts";
 import { monthsEnding, D } from "../finance/decimal";
 import { pitchFacts } from "./view";
 import type { IntegratedRead } from "./read";
@@ -540,12 +540,7 @@ export async function executeProductCommand(
         asOf,
         w.agency?.sampleWorkspace ? "sample" : "user_entered",
       );
-      if (prior) {
-        const saved = { ...(prior.input as Record<string, unknown>) };
-        delete saved.actualVersions;
-        delete saved.evidenceVersions;
-        v = readinessSchema.parse(saved);
-      }
+      if (prior) v = readinessBaseline(prior.input);
       v.months = w.actuals
         .filter((r) => monthsEnding(new Date(asOf), 6).includes(r.yearMonth))
         .map((r) => {
@@ -559,7 +554,7 @@ export async function executeProductCommand(
         });
       return finance.command({
         type: "finance.readiness",
-        input: { input: applyTeamEvidence(v, w.evidence) },
+        input: { input: v },
       });
     }
     case "scenario.create": {

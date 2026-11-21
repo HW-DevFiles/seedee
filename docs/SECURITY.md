@@ -223,8 +223,10 @@ the Server Action boundary.
 
 ## Package verification record
 
-Verified locally on 2026-11-21 against foundation commit
-`4f3176fd7d2523c4160666631896c223d6303ba7`:
+Verified locally on 2026-11-21 against security head
+`4f90c36fe1c6ab846afed6aea16bbd371b2ddf6f`, which builds on foundation base
+`4f3176fd7d2523c4160666631896c223d6303ba7`. These results are local fixture and
+foundation-route evidence, not integrated domain endpoint evidence:
 
 - `npm test`: 80 passing tests across five files, including 63 shared security
   tests and 15 account/session tests. The latter include the progressive-delay

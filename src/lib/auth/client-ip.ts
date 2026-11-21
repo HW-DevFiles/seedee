@@ -9,5 +9,11 @@ export function clientIpFromForwardedFor(
   if (!Number.isInteger(hops) || hops < 1 || !forwardedFor) return null;
   const entries = forwardedFor.split(",").map((entry) => entry.trim());
   if (entries.length < hops) return null;
-  return entries[entries.length - hops] || null;
+  const address = entries[entries.length - hops];
+  if (!address || address.includes("%") || !isIP(address)) return null;
+  // Canonicalize equivalent IPv6 forms so spelling variants share a bucket.
+  return isIP(address) === 6
+    ? new URL(`http://[${address}]/`).hostname.slice(1, -1)
+    : address;
 }
+import { isIP } from "node:net";

@@ -54,7 +54,7 @@ If you're building a business around your creative work, what would you want to 
 
 ### Suggested visual
 
-Use Ali's seed-to-studio growth illustration with “Give your next idea a working plan,” if that headline fits the final design. Avoid a money tree, investor logos, or a graphic that implies guaranteed financial growth. Proposed alt text: “Seedee seed-to-studio illustration with the words ‘Give your next idea a working plan.’ Demo preview with sample outputs.” Confirm the actual illustration before use.
+Use Ali's seed-to-studio growth illustration with Syd's final headline, “Start with your craft. Explore what comes next.” Retain the illustration's “No funding guarantee” disclosure. Avoid a money tree, investor logos, or a graphic that implies guaranteed financial growth. Proposed alt text: “Seedee seed-to-studio illustration with the words ‘Start with your craft. Explore what comes next.’ Demo preview with sample outputs.” Confirm the actual illustration before use.
 
 ### Owner check
 
@@ -83,7 +83,7 @@ Which step would you want to explore first?
 
 ### Suggested visual
 
-Use Ali's practical agency-workflow flyer. If a carousel is commissioned later, adapt its visual language into four numbered cards matching the steps above; label every card “Demo preview · Sample outputs.” Do not present unbuilt screens as screenshots. Proposed alt text: “Four proposed Seedee steps: describe your practice, review an agency direction, organize work, and prepare supporting evidence. Demo preview.”
+Use Ali's practical agency-workflow flyer with Syd's final headline, “Give your next idea a working plan.” If a carousel is commissioned later, adapt its visual language into four numbered cards matching the steps above; label every card “Demo preview · Sample outputs.” Do not present unbuilt screens as screenshots. Proposed alt text: “Four proposed Seedee steps: describe your practice, review an agency direction, organize work, and prepare supporting evidence. Demo preview.”
 
 ## 4. Follow-up: a creative's journey toward seed readiness
 
@@ -107,7 +107,7 @@ What evidence would help you explain the business behind your creative work more
 
 ### Suggested visual
 
-Pair Ali's practical workflow design with Syd's “Build the business behind the work” copy, subject to Ali's final mapping. Use a clearly labeled fictional journey; avoid invented revenue graphs, funding badges, or fabricated investor quotes. Proposed alt text: “Seedee. Build the business behind the work. A fictional creative's path toward organizing company evidence. Demo preview with sample outputs.”
+Reuse Ali's practical workflow design with its approved “Give your next idea a working plan” headline. Keep evidence-focused language in the post rather than replacing the flyer copy. Use a clearly labeled fictional journey; avoid invented revenue graphs, funding badges, or fabricated investor quotes. Proposed alt text: “Seedee. Give your next idea a working plan. Demo preview with sample outputs.”
 
 ## 5. Follow-up: behind the scenes of the AI crew
 
@@ -158,4 +158,4 @@ Owner chooses times in their local timezone. Review responses before each follow
 | Founder motivation | Proposed first-person copy | Hunter approves voice and intent |
 | Flyer mapping | Ali's three announced design directions | Ali confirms final PNG paths, text, crop, and alt text |
 
-June's claim review and final asset paths will be recorded here when received. A ready-for-review repository PR is not permission to publish these drafts. Before posting, obtain owner's copy and visual approval, verify the release, and add a destination only if one has been approved.
+Syd read all five drafts and confirmed the framing, fictional-example label, evidence language, first-person owner check, and question CTAs on 2026-11-21. Her flyer headline corrections are incorporated above. Ali supplied candidate posting assets on `fm/seedee-brand-flyers`: `marketing/flyers/01-company-taking-shape.png`, `marketing/flyers/02-working-plan.png`, and `marketing/flyers/03-business-behind-the-work.png` (1500 × 1200). The latter two filenames and Ali's initial mapping reflect earlier copy; confirm the exported image matches Syd's final headline/composition mapping above before selecting it. These are cross-branch asset references, not verified local files. June reviewed all five drafts on 2026-11-21 and found the product facts consistent with the assigned demo scope under the existing release holds; she confirmed the fictional labels and absence of statistics or outcome promises. This is editorial claim review, not verification of shipped behavior. Theo confirmed that the current scaffold supplies auth/navigation rather than the creative workflow, so feature checks remain open. June also retained the owner approval requirement for first-person motivation and the requirement that final alt text match the supplied image. A ready-for-review repository PR is not permission to publish these drafts. Before posting, obtain owner's copy and visual approval, verify the release, and add a destination only if one has been approved.

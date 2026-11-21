@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Manrope";
+  src: url("/brand/fonts/Manrope-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Manrope";
+  src: url("/brand/fonts/Manrope-Bold.ttf") format("truetype");
+  font-weight: 600 800;
+  font-style: normal;
+  font-display: swap;
+}
 @theme inline {
   --color-background: #f8f6ef;
   --color-primary: #355e3b;
@@ -8,7 +22,7 @@
   --color-accent: #d6a84b;
   --color-line: #bbc9b8;
   --color-danger: #922e25;
-  --font-sans: Arial, Helvetica, sans-serif;
+  --font-sans: "Manrope", Arial, Helvetica, sans-serif;
   --font-display: Georgia, "Times New Roman", serif;
   --text-display: clamp(3rem, 6vw, 5.5rem);
   --text-display--line-height: 1.04;
@@ -49,5 +63,49 @@ h3 {
   *::after {
     scroll-behavior: auto !important;
     transition: none !important;
+  }
+}
+
+@theme inline {
+  --color-control: #6b8068;
+}
+.eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+body {
+  margin: 0;
+}
+textarea,
+select {
+  font: inherit;
+}
+input,
+textarea,
+select {
+  scroll-margin-top: 2rem;
+}
+p,
+h1,
+h2,
+h3,
+dt,
+dd {
+  overflow-wrap: anywhere;
+}
+@media print {
+  header,
+  aside,
+  nav,
+  form {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  table {
+    min-width: 0 !important;
   }
 }

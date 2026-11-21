@@ -1,5 +1,6 @@
 import "server-only";
 import type { PrismaClient } from "@/generated/prisma/client";
+import { demoFixture } from "@/lib/demo-fixture";
 import { hashPassword, verifyPassword } from "./password";
 import { hashToken, issueToken } from "./tokens";
 import { credentialsSchema, signUpSchema } from "./validation";
@@ -11,6 +12,8 @@ export const AUTH_WINDOW_MS = 15 * 60 * 1000;
 const publicUser = { id: true, name: true, email: true } as const;
 // Equal-cost work for an unknown email; computed once per server process.
 const dummyHash = hashPassword("seedee-dummy-account-not-a-login");
+const signUpRefused =
+  "Unable to create an account with those details. Try signing in.";
 
 export class AuthError extends Error {}
 
@@ -78,6 +81,7 @@ export async function registerUser(
 ) {
   const parsed = signUpSchema.parse(input);
   await consumeAuthAttempt(db, parsed.email, clientIp);
+  if (parsed.email === demoFixture.email) throw new AuthError(signUpRefused);
   const passwordHash = await hashPassword(parsed.password);
   try {
     return await db.user.create({
@@ -91,9 +95,7 @@ export async function registerUser(
       "code" in error &&
       error.code === "P2002"
     ) {
-      throw new AuthError(
-        "Unable to create an account with those details. Try signing in.",
-      );
+      throw new AuthError(signUpRefused);
     }
     throw error;
   }

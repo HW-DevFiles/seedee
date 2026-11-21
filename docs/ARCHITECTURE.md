@@ -41,7 +41,7 @@ Behind trusted proxies, set `TRUST_PROXY_HOPS` to the number of proxies you oper
 
 In both modes a successful sign-in is not counted: it is taken back off the account counter and, when a client IP is trusted, off the per-IP counter, and the email and client IP counter is reset.
 
-These are minimal controls, not a complete internet-facing abuse defense: deployment still needs retention cleanup for expired throttle/session rows, account recovery, email verification, and monitoring. Those flows are not silently simulated in this foundation. Avoid logging raw form fields or secrets. A public deployment must not contain the published demo account.
+These are minimal controls, not a complete internet-facing abuse defense: deployment still needs retention cleanup for expired throttle/session rows, account recovery, email verification, and monitoring. Those flows are not silently simulated in this foundation. Avoid logging raw form fields or secrets. A public deployment must not contain the published demo account. Sign-up refuses the reserved demo address with the same generic error as a duplicate email, so the published account cannot be created through the app.
 
 For UI mutations, use Server Actions with schema validation and `requireUser()` inside the action/service. Next.js validates Server Action origins; preserve those defaults and do not loosen allowed origins. Server Actions are public request boundaries, not private functions merely because they live on the server. Do not trust an `ownerId` or `userId` submitted by the client. Derive identity from the session and scope queries to that user.
 

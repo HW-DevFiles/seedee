@@ -1,0 +1,14 @@
+.git
+.env*
+node_modules
+.next
+src/generated/prisma
+coverage
+playwright-report
+test-results
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.tsbuildinfo
+data

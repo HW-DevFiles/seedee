@@ -52,7 +52,7 @@ Install the test browser once with `npx playwright install chromium` before runn
 | `AI_PROVIDER`      | `demo`                 | Only `demo` is enabled; unknown values throw                                                                                                           |
 | `TRUST_PROXY_HOPS` | `0`                    | Trusted reverse proxies in front of the app; `0` trusts no client IP (see [sign-in throttling](docs/ARCHITECTURE.md#authentication-and-authorization)) |
 
-The demo provider uses built-in sample logic with no network or keys. A future provider must implement the typed interface under `src/lib/ai` and be explicitly enabled by the server-side factory. Adding an environment value alone cannot enable a paid model.
+The demo provider uses built-in sample logic with no network or keys. It supports validated agency proposals for seven creative practices, internal task artifacts and evidence-linked private pitch drafts. The [agency engine handoff](docs/AGENCY-ENGINE.md) documents persistence, owner review and required cross-package bindings; the current route placeholders do not claim those integrations are complete. A future provider must implement the typed interface under `src/lib/ai` and be explicitly enabled by the server-side factory. Adding an environment value alone cannot enable a paid model.
 
 ## Build on the foundation
 

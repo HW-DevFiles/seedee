@@ -77,7 +77,7 @@ The core scaffold provides no readiness score, financial model, autonomous agent
 
 ## AI seam
 
-`AIProvider` exposes `suggest(CreativeBrief): Promise<CreativeSuggestion>`. A suggestion identifies its provider and mode, includes a summary and next steps, and always requires human review. `DemoProvider` trims/validates bounded inputs and returns deterministic template output. It has no network access, API keys, random values, wall-clock dependence, or side effects. Tests check repeatability and network independence.
+`AIProvider` exposes `suggest(CreativeBrief): Promise<CreativeSuggestion>` plus schema-validated `generateAgency`, `simulateTask`, and `draftPitch` methods. Output identifies its provider, template versions and input summary, and always requires human review. `DemoProvider` normalizes bounded inputs and returns deterministic practice-specific templates. It has no network access, API keys, random values, wall-clock dependence, or side effects. Tests check repeatability and network independence. The agency engine persists runs, revisions and reviews through a required transaction adapter; see [AGENCY-ENGINE.md](AGENCY-ENGINE.md) for the shared migration, lifecycle and security bindings. Those integrations must land before the placeholder routes can use it.
 
 Application code calls `getAIProvider()` from the server-only factory. `AI_PROVIDER=demo` is the only registered value; an unknown value throws instead of silently making a network call. The current shell does not call the provider on page load. Feature owners can use it when implementing an explicit generation action.
 
